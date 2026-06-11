@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@bike-route-ai/shared": "*",
+    "lucide-react": "^1.17.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

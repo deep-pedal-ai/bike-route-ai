@@ -9,6 +9,8 @@
     "build": "npm run build -w packages/shared && npm run build -w packages/server && npm run build -w packages/client",
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint packages/",
+    "typecheck": "tsc --noEmit -p packages/shared/tsconfig.json && tsc --noEmit -p packages/server/tsconfig.json && tsc --noEmit -p packages/client/tsconfig.json",
+    "ci": "npm run lint && npm run typecheck && npm test",
     "prepare": "husky"
   },
   "devDependencies": {

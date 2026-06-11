@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test with coverage
+        run: npm run coverage --workspaces --if-present
+
+      - name: Coverage report — client
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          name: Client
+          json-summary-path: packages/client/coverage/coverage-summary.json
+          json-final-path: packages/client/coverage/coverage-final.json
+
+      - name: Coverage report — server
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          name: Server
+          json-summary-path: packages/server/coverage/coverage-summary.json
+          json-final-path: packages/server/coverage/coverage-final.json

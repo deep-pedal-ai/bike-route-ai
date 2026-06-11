@@ -9,6 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev          # start both servers concurrently (client: 8080, server: 3000)
 npm test             # run all tests across all packages
 npm run lint         # ESLint across all packages
+npm run typecheck    # tsc --noEmit across all packages
+npm run ci           # lint + typecheck + test in sequence (mirrors CI pipeline)
 npm run build        # build all packages (shared → server → client)
 
 # Run tests for a single package

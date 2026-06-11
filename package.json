@@ -1,0 +1,23 @@
+{
+  "name": "bike-route-ai",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w packages/server\" \"npm run dev -w packages/client\"",
+    "build": "npm run build -w packages/shared && npm run build -w packages/server && npm run build -w packages/client",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "eslint packages/",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "eslint": "^9.9.0",
+    "husky": "^9.1.5",
+    "lint-staged": "^15.2.9",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.3.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": "eslint"
+  }
+}

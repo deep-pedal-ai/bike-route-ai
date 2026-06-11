@@ -195,3 +195,72 @@ test-branch value, verified via `stats` (empty) before each run.
   fixture, so the oracle-reproduction rows are no longer queryable on the branch;
   the comparison counts are captured above. Teardown is orchestrator-owned.
 
+
+---
+
+## 2026-06-11 — WP4 live execution (Phase 4: canon + generation)
+
+Ran WP4 LIVE against `DATABASE_URL` (main) — authorized deliverable; orchestrator
+had snapshotted `main` to `pre-wp4-backup`. Baseline before run: 127 routes (125
+osm_relation + 2 nysdot), 23,807 facility_segments, all scored. `uv run pytest`
+green (50 passed) at start.
+
+### Canon — `phase4 --canon-only` (foreground)
+- 43 ride/variants routed via ORS directions. **stored=18, skipped(±25%)=22,
+  ORS_errors=3** (43 total). All skips/errors logged to `ingest_log` (phase4).
+- The 22 `canon_skip_distance` + 3 `canon_ors_error` (HTTP 404 — ORS could not
+  snap a DRAFT waypoint) are the EXPECTED DRAFT-coord skips (PLAN §11) → human
+  verify-coords gate, NOT a failure. Did NOT edit canon.yaml.
+- Stored canon verified: 18 rows, match_quality=1.0, all three breakdowns
+  (surface/waytype/steepness) + ascent_m populated, tags.out_and_back true=12/
+  false=6, ORS attribution. out_and_back rows show symmetric ascent=descent
+  (return leg appended). Canon rows are NOT scored by Phase 4 (quality_score NULL
+  → scored in the WP5 phase3 re-run) — by design.
+
+### Generation — `phase4 --generate-only` (background)
+- FIRST attempt crashed mid-loop at counter=95 with psycopg `OperationalError:
+  SSL SYSCALL error: Can't assign requested address` — a transient connection
+  drop to Neon (cause undetermined), surfaced inside the `_log`-on-error path.
+  generate_loops commits only at the end → the whole generation transaction
+  rolled back cleanly (verified 0 generated rows, 0 generation_* logs). NOT a
+  gate fail, NOT a quota pause (95/2000). Recovered per §10 (cache-resume), no
+  code change.
+- RE-RUN completed (exit 0): the 55 cached calls replayed free, then the live
+  tail. **kept=5, rejected_length=134, rejected_quality=65, rejected_dup=3,
+  ORS_errors=33** (=240 = 12 seeds × 4 lengths × 5 seeds). deduped(removed)=0.
+- 33 generation_ors_error classified: 29 "read operation timed out" (60s client
+  timeout on slow ORS round-trips) + 4 HTTP 404. **0 are 429/quota** → run is
+  pass, not paused.
+- 5 kept generated rows verified: all quality_score ≥ 0.55 (0.556–0.789), all
+  within ±20% of target, match_quality=1.0, "Generated loop…" attribution, scores
+  populated (protected/greenway/coverage/quality).
+
+### Dedup
+- Ladder `canon > osm_relation > nysdot > usbrs > open_gpx > generated` applied,
+  scoped to `only_sources=[generated]` (cli.py:246). removed=0, 0
+  `skipped_duplicate` logs. **NET effect on pre-existing rows = ZERO**:
+  osm_relation 125 (unchanged), nysdot 2 (unchanged). The canon↔osm marquee
+  duplicates (Central Park, Prospect Park, Hudson Greenway…) deliberately COEXIST
+  — the full-table cross-source pass that hard-deletes them is WP5, not WP4.
+
+### Quota
+- Per-endpoint counter `data/raw/ors_counters.json` = `{"v2/directions": 247}`
+  for 2026-06-11 (limit 2000). Never paused. 247 responses disk-cached → a future
+  re-run replays free.
+
+### Final stats / gate
+- routes total 150: osm_relation 125, canon 18, nysdot 2, generated 5.
+- scored 132 (osm 125 + nysdot 2 + generated 5; canon awaits WP5). facility_
+  segments 23,807. quality_score min=0.300 avg=0.500 max=0.900.
+- No description/embedding/embedding_model columns (AC#3 / ADR-0004).
+- gate: **pass**.
+
+### Surprises / followups
+- The error-handling path `_log() → cur.execute()` is NOT resilient to a dead DB
+  connection: a single ORS error during a connection blip turns a would-be-logged
+  skip into a full-run crash + total generation rollback (the first-attempt
+  crash). Cache-resume recovers it, but a code owner may want to make the error
+  log defensive (e.g. ping/reconnect, or log to stderr if the cursor is dead).
+  Flagged, NOT fixed (out of WP4 scope; tests green).
+- ORS round-trip is intermittently very slow (29/240 hit the 60s read timeout),
+  making the live generation run ~30 min wall-clock. Cache makes any resume cheap.

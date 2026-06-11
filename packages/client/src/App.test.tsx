@@ -1,18 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import App from './App';
 
-beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    json: () => Promise.resolve({ routes: [] }),
-  }));
-});
-
 describe('App', () => {
-  it('renders the heading', async () => {
-    await act(async () => {
-      render(<App />);
-    });
-    expect(screen.getByText('Bike Route AI')).toBeInTheDocument();
+  it('renders the hero heading', () => {
+    render(<App />);
+    expect(screen.getByText('ride')).toBeInTheDocument();
+  });
+
+  it('renders the generate button', () => {
+    render(<App />);
+    expect(screen.getByText('Generate Route')).toBeInTheDocument();
+  });
+
+  it('renders the quick query pills', () => {
+    render(<App />);
+    expect(screen.getByText('Gravel + Coffee')).toBeInTheDocument();
+    expect(screen.getByText('Coastal Road Ride')).toBeInTheDocument();
+    expect(screen.getByText('Easy Path Cruise')).toBeInTheDocument();
   });
 });

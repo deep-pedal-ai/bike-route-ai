@@ -137,6 +137,25 @@ def _log(cur: psycopg.Cursor, *, event_type: str, source_ref: str | None,
     )
 
 
+def has_facilities(conn: psycopg.Connection) -> bool:
+    """True when the NYC DOT facility source already has rows in the DB.
+
+    Scoring only READS ``facility_segments``, so when they are present the
+    expensive per-row re-ingest (23,807 MultiLineStrings over a remote
+    connection — the ~24 min hang in the WP5 finalize) is pure wasted work. The
+    CLI uses this to SKIP the re-ingest and fall straight through to
+    score-existing. Source-scoped to :data:`SOURCE` (``nyc_dot``) — the exact
+    source the scorer queries — so a row from an unrelated facility source does
+    not mask a missing NYC DOT ingest.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT EXISTS (SELECT 1 FROM facility_segments WHERE source = %s)",
+            (SOURCE,),
+        )
+        return bool(cur.fetchone()[0])
+
+
 def ingest_facilities(
     conn: psycopg.Connection, feature_collection: dict[str, Any]
 ) -> FacilityStats:

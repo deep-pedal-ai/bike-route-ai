@@ -78,6 +78,27 @@ class Settings(BaseSettings):
     generation_length_tolerance: float = 0.20  # ±20% of target length
     canon_distance_tolerance: float = 0.25  # ±25% of expected_km (canon sanity)
 
+    # --- Cross-source dedup length-ratio guard (WP5 remediation) -----------
+    # Two routes are merged by apply_dedup_pass ONLY IF they are both highly
+    # overlapping (geometry.routes_overlap) AND similar in length:
+    #   min(len_a, len_b) / max(len_a, len_b) >= dedup_length_ratio_min.
+    # Without this guard, a SHORT ride wholly inside a LONG corridor reads as a
+    # duplicate (it overlaps > 80% of its OWN shorter length) and the ladder then
+    # deletes the longer, more complete ride.
+    #
+    # CALIBRATION (WP5 remediation, empirical against the live 151-route corpus):
+    # the brief's suggested default 0.8 still deleted 3 of the 6 named distinct
+    # rides — same-corridor OUT-AND-BACK rides (the three different 9W
+    # destinations: Piermont / Nyack / State Line Lookout, + NYSDOT SBR 9) have
+    # high length ratios because they cover overlapping stretches of one corridor:
+    # measured ratios cluster at 0.81–0.92 (distinct rides) while genuine
+    # coincident duplicates measure >=0.997 (Manhattan Waterfront↔West Side 0.997,
+    # Ocean Parkway↔Brooklyn-Queens Greenway 1.000). That clean gap (0.92 | 0.997)
+    # puts the separating threshold at 0.95: it keeps every distinct named ride
+    # and still merges the two true coincident twins. Tunable v1 default; see
+    # ADR-0003 + the WP5-remediation BUILD-LOG entry for the per-pair evidence.
+    dedup_length_ratio_min: float = 0.95
+
 
 def load_settings(**overrides) -> Settings:
     """Construct Settings, surfacing missing-required-var errors clearly."""

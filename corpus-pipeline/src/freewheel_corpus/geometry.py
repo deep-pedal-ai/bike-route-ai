@@ -65,6 +65,17 @@ FACILITY_PROXIMITY_M = 15.0
 DEDUP_BUFFER_M = 25.0  # buffer radius around route A
 DEDUP_OVERLAP_FRACTION = 0.80  # > 80% of the shorter route inside the buffer
 DEDUP_SIMPLIFY_M = 5.0  # simplify tolerance before the overlap math (projected m)
+# Length-ratio guard (WP5 remediation), applied by the dedup APPLICATION
+# (phases.p4_canon_and_generation.apply_dedup_pass), NOT by routes_overlap:
+# two routes merge only if min(len_a,len_b)/max(len_a,len_b) >= this AND they
+# overlap. Stops a SHORT ride inside a LONG corridor (overlaps > 80% of its OWN
+# length, ratio << 1) being treated as a duplicate of the longer, more complete
+# ride. Calibrated to 0.95 (NOT the brief's hedged 0.8 default): empirically, the
+# live corpus's distinct same-corridor out-and-back rides cluster at length ratio
+# <=0.92 while genuine coincident duplicates measure >=0.997 — see
+# settings.dedup_length_ratio_min (the authoritative configurable value the dedup
+# reads) + the WP5-remediation BUILD-LOG for the per-pair evidence. ADR-0003.
+DEDUP_LENGTH_RATIO_MIN = 0.95
 
 
 @lru_cache(maxsize=1)
@@ -185,6 +196,24 @@ def assemble_relation(ways: list[LineString]) -> AssemblyResult:
 def line_length_km(line: LineString) -> float:
     """Length of a lon/lat ``LineString`` in km, projected to EPSG:32618."""
     return project_to_utm(line).length / 1000.0
+
+
+def length_ratio(a: LineString, b: LineString) -> float:
+    """Projected length ratio ``min(len_a, len_b) / max(len_a, len_b)`` in [0, 1].
+
+    Both lines are projected to EPSG:32618 (so the ratio is a true metric ratio,
+    not a degrees-distorted one). 1.0 means equal length; near 0 means one is far
+    shorter than the other. The dedup application (``apply_dedup_pass``) uses this
+    as a guard: a pair is a duplicate candidate only when this ratio is high (the
+    two rides are similar length) AND they overlap. A zero-length (degenerate)
+    line yields 0.0 (it can never be a similar-length duplicate of a real line).
+    """
+    la = project_to_utm(a).length
+    lb = project_to_utm(b).length
+    longer = max(la, lb)
+    if longer == 0:
+        return 0.0
+    return min(la, lb) / longer
 
 
 def endpoint_gap_m(component: LineString, kept: LineString) -> float:

@@ -599,26 +599,44 @@ def apply_dedup_pass(
     conn: psycopg.Connection,
     *,
     only_sources: list[str] | None = None,
+    length_ratio_min: float | None = None,
 ) -> int:
     """Full-table cross-source dedup: pair overlapping routes, keep the
     higher-precedence one, HARD-DELETE the loser, log both IDs (ADR-0003).
 
-    The overlap test uses the WP1 pure predicate (:func:`routes_overlap_either`,
-    the symmetric wrapper). The winner is chosen by :data:`SOURCE_PRECEDENCE`
-    alone — NOT by ``quality_score`` (ADR-0003: a human-curated canon ride beats a
-    raw OSM relation even when facility math scores OSM fractionally higher; the
-    ladder makes the survivor deterministic and re-run stable). Each
-    ``skipped_duplicate`` log row carries both route IDs + sources in ``details``.
+    A pair is a duplicate candidate ONLY IF both (a) they overlap (the WP1 pure
+    predicate :func:`routes_overlap_either`, the symmetric wrapper) AND (b) they
+    are **similar in length** —
+    ``min(len_a, len_b) / max(len_a, len_b) >= length_ratio_min`` (the WP5
+    length-ratio guard, default :data:`settings.dedup_length_ratio_min` / 0.8).
+    The guard is what stops the over-deletion the un-guarded pass caused: a SHORT
+    ride wholly inside a LONG corridor overlaps > 80% of its OWN (shorter) length,
+    so the bare overlap predicate flagged it a duplicate and the ladder then
+    deleted the longer, MORE complete ride. Requiring similar length means distinct
+    corridor-sharing rides (e.g. three different 9W destinations) are kept, while
+    near-equal coincident twins (ratio ≈ 1.0) still merge. The guard lives HERE in
+    the application, so :func:`geometry.routes_overlap` (WP1 tested semantics) and
+    the generation gate's use of :func:`routes_overlap_either` stay untouched.
+
+    The winner is chosen by :data:`SOURCE_PRECEDENCE` alone — NOT by
+    ``quality_score`` (ADR-0003: a human-curated canon ride beats a raw OSM
+    relation even when facility math scores OSM fractionally higher; the ladder
+    makes the survivor deterministic and re-run stable). Each ``skipped_duplicate``
+    log row carries both route IDs + sources in ``details``.
 
     Used by Phase 4 (generated-candidate dedup) and the final Phase-3 cross-source
     pass (WP5). ``only_sources`` optionally restricts which candidates may be
     DELETED (the survivor can still be any source) — Phase 4 generation uses this
     to remove only freshly-generated duplicates, leaving the established corpus
-    untouched until the WP5 full pass.
+    untouched until the WP5 full pass. ``length_ratio_min`` overrides the guard
+    threshold (defaults to the configured one).
 
     Returns the number of rows hard-deleted.
     """
     from shapely import wkb
+
+    if length_ratio_min is None:
+        length_ratio_min = Settings().dedup_length_ratio_min
 
     with conn.cursor() as load_cur, conn.cursor() as work_cur:
         load_cur.execute(_DEDUP_LOAD_SQL)
@@ -636,6 +654,11 @@ def apply_dedup_pass(
             for j in range(i + 1, len(rows)):
                 id_b, src_b, geom_b = rows[j]
                 if id_b in deleted:
+                    continue
+                # WP5 length-ratio guard (cheap-first): two routes merge only if
+                # they are similar length. A short ride inside a long corridor has
+                # ratio << 1 → skipped here, so it can never be deleted as a "dup".
+                if geometry.length_ratio(geom_a, geom_b) < length_ratio_min:
                     continue
                 if not routes_overlap_either(geom_a, geom_b):
                     continue

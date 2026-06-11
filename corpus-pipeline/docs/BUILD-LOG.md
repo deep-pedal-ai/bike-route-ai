@@ -264,3 +264,213 @@ green (50 passed) at start.
   Flagged, NOT fixed (out of WP4 scope; tests green).
 - ORS round-trip is intermittently very slow (29/240 hit the 60s read timeout),
   making the live generation run ~30 min wall-clock. Cache makes any resume cheap.
+
+## 2026-06-11 — WP5 final pass: cross-source dedup, stats, docs, E2E [subagent]
+
+### Code (TDD; all against TEST_DATABASE_URL via `clean_db`, self-cleaning)
+- `p3_quality_scoring.run_final_pass(conn)` — the orchestrated FINAL phase3: SCORE
+  every row in place (fills the 18 canon NULL `quality_score`) THEN
+  `p4.apply_dedup_pass(conn)` (full-table, no `only_sources` → whole table in
+  scope) per ADR-0003. Returns `FinalPassStats(scored,in_coverage,deduped,ids)`.
+  Wired into `cli.py phase3` so the run order `migrate→p1→p2→p3→p4→p3` works; the
+  final p3 is idempotent (score recompute-in-place + a 2nd dedup finds 0).
+- `stats.py` — extracted `gather_stats(conn)->CorpusStats` + `format_stats()`;
+  CLI `stats` now delegates. Adds the **score-distribution histogram** (0.1
+  buckets via PG `round(quality_score::numeric,1)`) + rejected/unmatched counts
+  from the ingest_log event taxonomy (a min/avg/max summary is not a distribution).
+- New tests (+5, suite 50→55 green): `test_p3_final_pass.py` (score-then-dedup
+  through the wiring + idempotency), `test_stats.py` (counts-by-source + buckets +
+  rejected/unmatched), `test_p1_integration.py` (Phase 1 from a committed
+  synthetic Overpass fixture → TEST_DATABASE_URL via the real ingest path; skips
+  cleanly when unset; never spins a container). Fixture: `fixtures/overpass_small.json`.
+
+### Docs (all marked NOT-implemented where applicable)
+- `docs/infrastructure.md` — DB handoff: PG16/PostGIS3.4+ baseline (live PG17.10/
+  PostGIS3.5), `DATABASE_URL` contract + DDL rights (incl. hard-delete +
+  future `CREATE EXTENSION vector`), trivial volume, a REFERENCE-ONLY
+  `postgis/postgis:16` compose snippet (pgvector noted as a future add, NOT in
+  that image), self-hosted ORS/Valhalla graph-extent-covers-all-geometry note.
+- `docs/embeddings-plan.md` — top banner "NOTHING in this document is
+  implemented"; description template (exclude hard constraints/coords/names;
+  terrain/surface/protection in words); `Embedder` protocol (hosted 1536-d +
+  local 384-d, dim config-time, every row stores `embedding_model`, mixed-model
+  corpora forbidden); the future additive `ALTER TABLE`; no ANN index at this
+  scale; a ranking acceptance test.
+- `README.md` — setup, env vars, run order (+why phase3 twice), canon-verification
+  workflow, `osm-api-js` considered-alternatives verdict, ODbL obligations
+  (attribution must surface in any UI; share-alike on the derived DB), pointers to
+  the two docs + RECOVERY/TEARDOWN.
+
+### Live final pass (DATABASE_URL = main; backed up to Neon branch `pre-wp5-backup`)
+- Pre-run name/score snapshot of all 150 routes → `/tmp/wp5_pre_dedup_snapshot.json`
+  (the dedup hard-deletes; `skipped_duplicate` logs store IDs only, so the snapshot
+  is the ONLY way to map a `deleted_id` back to its name).
+- **Surprise — CLI `phase3` hung ~24 min on the facility re-ingest** (process
+  STAT=S, 0:15 CPU / 24:27 elapsed = blocked I/O, not the O(n²) dedup; Socrata
+  response WAS cached at 18 MB, so the stall was the re-ingest of 23,807
+  MultiLineString rows / large-JSON parse, NOT the HTTP fetch — and it has no
+  timeout to fall through to the CLI's own "score existing facilities only"
+  fallback). Killed PID 14841+14830; the open txn rolled back → DB verified back
+  at baseline (150 / 18 NULL / 23807 / 0 dup logs = the snapshot).
+- Finalized via `p3.run_final_pass(conn)` directly (equivalent to CLI phase3 minus
+  the redundant Socrata re-ingest — the 23,807 nyc_dot facilities are already
+  present + verified; scoring only reads them). 279.9 s. **scored=150,
+  in_coverage=117, deduped=16.**
+- Idempotency re-run (live): scored=134, **deduped=0** → safe to re-run.
+
+### Dedup net effect (16 hard-deleted; ladder, NOT score) — ⚠️ SEE CAVEAT
+- deleted-by-source: osm_relation 10, canon 4, nysdot 2. Winners: osm 9, canon 7.
+- Final corpus: **150 → 134 routes** (osm_relation 115, canon 14, generated 5),
+  every row scored (0 NULL), 23,807 facility_segments. usbrs empty (Gate 5b).
+- **The full-table pass ran for the FIRST time here.** WP4 scoped
+  `apply_dedup_pass` to `only_sources=[generated]`, so within-source and
+  canon-loses deletions never occurred before; removing that restriction (correct
+  per ADR-0003 / PLAN §7) exposed an over-deletion the ADR's `routes_overlap`
+  predicate causes: it tests ">80% of the SHORTER route inside buffer(longer)",
+  so when a short ride sits inside a long ride's corridor it reads as a duplicate,
+  and the ladder/lower-id tiebreak then **keeps the shorter and deletes the
+  longer/more-complete** ride. ADR-0003's stated intent is cross-SOURCE marquee
+  twins (same ride as osm AND canon), not distinct rides sharing a corridor.
+- **Classification of the 16 (lengths from the pre-run snapshot):**
+  - *True / defensible dups (~6):* canon "Ocean Parkway Greenway" ← osm "Ocean
+    Parkway" (cross-source, intended); canon "Manhattan Perimeter" ← osm
+    "Manhattan Waterfront Greenway" (cross-source); osm "Manhattan Waterfront
+    Greenway" 20.8km ↔ "Manhattan West Side Bike Path" 20.7km (ratio 1.0); osm
+    "Ocean Parkway" ↔ "Brooklyn-Queens Greenway" 8.6↔8.6 (ratio 1.0); osm "25A"
+    ← nysdot "State Bike Route 25A" 0.1km (degenerate fragment); canon "Prospect
+    Park (full)" ← "(double)" (true variant).
+  - *FALSE POSITIVES — distinct rides destroyed (~6–7):* canon "9W to Piermont"
+    KEPT, **canon "9W to Nyack" 60.9km + canon "State Line Lookout" 43.7km +
+    nysdot "State Bike Route 9" 40.3km all DELETED** (3 different
+    destinations/slugs, all longer, all share the 9W corridor → kept the shortest);
+    osm "Hudson River Waterfront Walkway" 10.3km KEPT, osm "East Coast Greenway"
+    25.8km + "9-11 Trail NJ Spur" 17.2km DELETED; osm "Jones Beach Bike Path" KEPT,
+    "Ocean Parkway Coastal Greenway" 21.8km DELETED; canon "Manhattan Perimeter"
+    KEPT, canon "Hudson River Greenway (to-chelsea)" 10km DELETED (sub-segment).
+- **This is a corpus-completeness regression → Gate 5b (human-gated), NOT
+  auto-fixed and NOT reverted.** Restore path = Neon branch `pre-wp5-backup`
+  (`br-snowy-paper-afgq1xo0`, verified to still hold 150/18-NULL/0-dup). Human
+  options: (a) restore the distinct rides from the backup; (b) constrain the final
+  dedup to cross-source-only, or add a length-ratio / distinct-endpoint guard so a
+  short ride contained in a long corridor is NOT treated as a duplicate.
+
+### Gate 5a (verified here)
+- AC#1: osm geometry + breakdowns valid (unchanged from WP1).
+- AC#3: all 134 rows scored; `stats` reports source counts + score histogram
+  (0.3:65 0.4:9 0.5:5 0.6:13 0.7:15 0.8:7 0.9:20) + rejected 1233 / unmatched 0;
+  information_schema confirms **NO description/embedding/embedding_model columns
+  and NO `vector` extension** (ADR-0004).
+- AC#4: infrastructure.md + embeddings-plan.md exist, accurate, not-implemented.
+- AC#5: changes only under `corpus-pipeline/`.
+- **Gate 5a: PASS.** Suite 55 green.
+
+### Gate 5b (human-gated — recorded, NOT blocking; ESCALATE)
+- canon: 18 stored pre-dedup → **14** after dedup. 2 of the 4 removed canon rows
+  (**"9W to Nyack", "State Line Lookout"**) are DISTINCT entries/destinations, not
+  redundant variants — the "18 stored" the brief expected is now materially
+  different, by over-deletion (see dedup caveat above), not by curation.
+- 22 `canon_skip_distance` events = DRAFT coords pending human verify-coords→re-run
+  (the expected first-run skips; not a failure, PLAN §11).
+- `usbrs` source empty (manual GPX absent in unattended build).
+- **Escalate:** human to decide restore-from-`pre-wp5-backup` vs constrain the
+  final dedup predicate, then re-run.
+
+### Surprises / followups
+- **Dedup over-deletion (above): ~6–7 of the 16 hard-deletes destroyed distinct
+  rides** (the `routes_overlap` "80% of shorter" predicate keeps the shorter ride
+  when a short route is contained in a long corridor). Reported, NOT auto-fixed
+  (the spec forbids autonomous corpus "fixes"; backup is the restore path).
+- CLI `phase3` Socrata facility re-ingest hangs with no timeout — a code owner may
+  want a fetch/ingest timeout so the final pass falls through to the "score
+  existing facilities only" path instead of blocking. Flagged, NOT fixed.
+- Neon branch left intact (human keeps the DB for exploration; not torn down).
+
+## 2026-06-11 — WP5 remediation: restore + length-ratio dedup guard [subagent]
+
+The human chose: RESTORE main to ~150, refine the dedup with a LENGTH-RATIO
+GUARD, re-finalize. Did exactly that. Backup branch `pre-wp5-backup`
+(`br-snowy-paper-afgq1xo0`, 150/18-NULL) NEVER touched.
+
+### 1. Restore main 134 → 151 (idempotent ingest, NO dedup)
+- `phase1` → osm_relation 126 (oracle 125; the brief's allowed +1 OSM day-drift).
+- `phase2` → nysdot 2 (SBR 9 + SBR 25A); usbrs/open_gpx empty (manual GPX absent,
+  Gate 5b). All ORS/Overpass/ArcGIS calls replayed from disk cache (no `--no-cache`).
+- `phase4 --canon-only` → canon 18 (22 DRAFT-coord skips + 3 ORS errors, replayed
+  from cache — the expected first-run skips, PLAN §11). `--canon-only` means
+  generation (and its dedup) is skipped, so NO dedup ran during restore.
+- Post-restore: 151 routes (osm 126, canon 18, nysdot 2, generated 5), facilities
+  23,807 intact. The 16 over-deleted distinct rides are back.
+
+### 2. Length-ratio guard (TDD) — IN the dedup application, not routes_overlap
+- `geometry.length_ratio(a,b)` = `min/max` of projected (EPSG:32618) lengths;
+  `apply_dedup_pass` now skips a pair (cheap-first) when
+  `length_ratio < settings.dedup_length_ratio_min` BEFORE the overlap test +
+  ladder. `geometry.routes_overlap` (WP1 tested semantics) and the generation
+  gate's `routes_overlap_either` are UNTOUCHED — so all prior tests stay green.
+- Tests added (RED→GREEN): (a) short-ride-inside-long-corridor → NOT merged
+  (reproduced the over-deletion first); (b) near-equal coincident pair → merged,
+  lower-precedence loser hard-deleted + logged; (c) **calibration lock**: a
+  distinct same-corridor pair at ratio ≈0.92 → NOT merged (fails at ≤0.92, passes
+  at 0.95 — pins the threshold so a revert is caught by a red test). Plus the
+  facility-present guard tests (step 4). Suite 55 → **60 green**.
+- **CALIBRATION SURPRISE (surfaced, not silently bumped):** the brief's suggested
+  default **0.8 still deleted 3 of the 6 named distinct rides**. A read-only
+  in-memory dry-run over the restored 151 geoms (faithful: same predicate + ladder)
+  showed same-corridor OUT-AND-BACK rides cluster at length ratio **0.81–0.92**
+  (the three 9W destinations Piermont/Nyack/State-Line-Lookout + NYSDOT SBR 9, all
+  retracing overlapping stretches of one corridor) while genuine coincident
+  duplicates measure **≥0.997** (Manhattan Waterfront↔West Side 0.997, Ocean
+  Parkway↔Brooklyn-Queens Greenway 1.000). 0.9 still deleted SBR 9 (State Line
+  Lookout↔SBR9 ratio 0.922). Clean structural gap 0.922 | 0.997 → calibrated to
+  **0.95** (`settings.dedup_length_ratio_min`, the value the dedup reads;
+  `geometry.DEDUP_LENGTH_RATIO_MIN` updated for doc consistency). Justified: "these
+  6 distinct rides present" is the task's hard unhedged acceptance criterion and
+  literal purpose, while "0.8" is explicitly hedged ("a sensible default; document
+  it"); when a hedged parameter conflicts with the unhedged goal, the goal wins.
+  Raising the threshold can only PROTECT rides, never newly-delete one.
+
+### 3. Re-finalize main (direct `run_final_pass(conn)`, NOT cli phase3)
+- Scored the existing facilities directly — NO Socrata re-ingest (the 23,807 rows
+  are present; scoring only reads them). `has_facilities()` returned True.
+  **scored=151, in_coverage=117, deduped=2** in 248.6 s — NO hang (the prior WP5
+  attempt hung ~24 min on the re-ingest).
+- The 2 deletions reproduced the dry-run EXACTLY, both TRUE near-equal-length
+  coincident duplicates (osm↔osm):
+  - KEEP osm "Manhattan Waterfront Greenway" 20.8 km ← DEL osm "Manhattan West Side
+    Bike Path" 20.7 km (ratio 0.997)
+  - KEEP osm "Ocean Parkway" 8.6 km ← DEL osm "Brooklyn-Queens Greenway" 8.6 km
+    (ratio 1.000)
+- Final main: **149 routes** (osm_relation 124, canon 18, nysdot 2, generated 5),
+  **0 NULL quality_score** (all 149 scored), facilities 23,807. `stats` clean.
+  quality_score min=0.300 avg=0.520 max=0.983.
+- All 6 previously-over-deleted named distinct rides PRESENT + scored: "9W to
+  Nyack" (canon 60.9 km), "State Line Lookout" (canon 43.7 km), "State Bike Route
+  9" (nysdot 40.3 km) + "State Bike Route 25A" (nysdot 2.0 km), "East Coast
+  Greenway" (osm, multiple), "Ocean Parkway Coastal Greenway" (osm 21.8 km).
+
+### 4. Socrata-reingest hang fix
+- `facility_ingest.has_facilities(conn)` (source-scoped to `nyc_dot`); CLI `phase3`
+  now SKIPS the re-ingest when facilities are present (clear log) and falls through
+  to score-existing, with a `--reingest-facilities` escape hatch to force a refresh.
+  The first-ever phase3 (no facilities) still ingests. The Socrata client already
+  had a 120 s HTTP timeout — the hang was the 23,807-row INSERT loop, not the
+  (cached) fetch, so skip-when-present is the robust fix. TDD'd via `has_facilities`
+  (2 tests) rather than the CLI directly.
+
+### Gate 5a (verified on main)
+- AC#3: all 149 rows scored; `stats` reports source counts + score histogram +
+  rejected/unmatched; `information_schema` confirms **0 description/embedding/
+  embedding_model columns and NO `vector` extension** (ADR-0004).
+- AC#5: changes only under `corpus-pipeline/` (5 src + 2 new test files); no
+  `packages/**` touched.
+- gate: **PASS**. `uv run pytest` → 60 passed.
+
+### Surprises / followups
+- The 0.8→0.95 calibration above (the load-bearing finding). The mechanism the
+  human chose (length-ratio guard) was correct; only the free parameter needed
+  empirical calibration against the named-ride ground truth.
+- `ingest_log` is append-only, so cumulative counts (`skipped_duplicate: 18` =
+  16 stale from the original over-deletion run + 2 this run; `canon_skip_distance`
+  accumulates across canon re-runs). The route COUNT (149 = 151 − 2) is the
+  authoritative record of THIS run's hard-deletes, not the log total.
+- Neon `pre-wp5-backup` branch left intact (restore-of-last-resort; never touched).

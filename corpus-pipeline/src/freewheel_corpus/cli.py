@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import typer
 
-from freewheel_corpus import db, migrations
+from freewheel_corpus import db, migrations, stats as stats_module
 from freewheel_corpus.config.settings import Settings
 
 app = typer.Typer(
@@ -44,57 +44,8 @@ def stats() -> None:
     settings = _settings()
     with db.connect(settings.database_url) as conn:
         db.check_postgis(conn)  # fail fast with a clear message if PostGIS absent
-        with conn.cursor() as cur:
-            cur.execute("SELECT count(*) FROM routes")
-            total = cur.fetchone()[0]
-
-            cur.execute(
-                "SELECT source, count(*) FROM routes GROUP BY source ORDER BY source"
-            )
-            by_source = cur.fetchall()
-
-            cur.execute(
-                "SELECT count(*) FROM routes WHERE quality_score IS NOT NULL"
-            )
-            scored = cur.fetchone()[0]
-
-            cur.execute(
-                "SELECT min(quality_score), avg(quality_score), max(quality_score) "
-                "FROM routes WHERE quality_score IS NOT NULL"
-            )
-            qmin, qavg, qmax = cur.fetchone()
-
-            cur.execute("SELECT count(*) FROM facility_segments")
-            facilities = cur.fetchone()[0]
-
-            cur.execute(
-                "SELECT event_type, count(*) FROM ingest_log "
-                "GROUP BY event_type ORDER BY event_type"
-            )
-            events = cur.fetchall()
-
-    typer.echo("Freewheel corpus — stats")
-    typer.echo(f"  routes total:        {total}")
-    typer.echo("  routes by source:")
-    if by_source:
-        for src, n in by_source:
-            typer.echo(f"    {src}: {n}")
-    else:
-        typer.echo("    (none)")
-    typer.echo(f"  scored routes:       {scored}")
-    if scored:
-        typer.echo(
-            f"  quality_score:       min={qmin:.3f} avg={qavg:.3f} max={qmax:.3f}"
-        )
-    else:
-        typer.echo("  quality_score:       (no scored routes)")
-    typer.echo(f"  facility_segments:   {facilities}")
-    typer.echo("  ingest_log events:")
-    if events:
-        for et, n in events:
-            typer.echo(f"    {et}: {n}")
-    else:
-        typer.echo("    (none)")
+        result = stats_module.gather_stats(conn)
+    typer.echo(stats_module.format_stats(result))
 
 
 @app.command()
@@ -154,8 +105,35 @@ def phase3(
     no_cache: bool = typer.Option(
         False, "--no-cache", help="Bypass the Socrata disk cache (re-fetch live)."
     ),
+    reingest_facilities: bool = typer.Option(
+        False,
+        "--reingest-facilities",
+        help="Force re-ingest of NYC DOT facilities even if they are already "
+        "present (default: skip the slow re-ingest and score against the "
+        "existing facility_segments).",
+    ),
 ) -> None:
-    """Phase 3 — facility data + quality scoring (WP3)."""
+    """Phase 3 — facility data + quality scoring + cross-source dedup (WP3/WP5).
+
+    Ingests NYC DOT facilities, then runs the FINAL pass: it SCORES every route in
+    place (filling the NULL ``quality_score`` of canon/generated rows ingested in
+    Phase 4) AND runs the full-table cross-source dedup pass (ADR-0003): it
+    hard-deletes the lower-precedence twin of each overlapping pair (e.g. the
+    osm_relation twin of a marquee canon ride) and logs both IDs under
+    ``skipped_duplicate``. This is what makes the documented run order
+    ``migrate → phase1 → phase2 → phase3 → phase4 → phase3`` work — the final
+    ``phase3`` is idempotent and safe to re-run.
+
+    **Facility re-ingest is SKIPPED when the NYC DOT facilities are already
+    present** (the common case for the final pass in the run order). Scoring only
+    READS ``facility_segments``, so re-inserting 23,807 MultiLineString rows over a
+    remote connection every run is pure wasted work — and it has no statement
+    timeout, so it blocked the WP5 finalize for ~24 min. The guard
+    (:func:`facility_ingest.has_facilities`) lets the final pass fall straight
+    through to score-existing. Pass ``--reingest-facilities`` to force a refresh
+    (e.g. the dataset changed); the first-ever phase3 (no facilities yet) always
+    ingests.
+    """
     from freewheel_corpus.clients.socrata import SocrataClient
     from freewheel_corpus.phases import facility_ingest, p3_quality_scoring
 
@@ -164,30 +142,42 @@ def phase3(
     with db.connect(settings.database_url) as conn:
         db.check_postgis(conn)
 
-        try:
-            fc = socrata.fetch_geojson(
-                facility_ingest.NYC_DOT_DATASET,
-                where=f"status='{facility_ingest.CURRENT_STATUS}'",
-                no_cache=no_cache,
+        fac_stats = None
+        facilities_ok = False
+        already_present = facility_ingest.has_facilities(conn)
+
+        if already_present and not reingest_facilities:
+            typer.echo(
+                "  NYC DOT facilities already present — skipping re-ingest "
+                "(scoring reads them in place; pass --reingest-facilities to "
+                "force a refresh)."
             )
-            fac_stats = facility_ingest.ingest_facilities(conn, fc)
-            facilities_ok = True
-        except Exception as exc:
-            conn.rollback()
-            typer.echo(f"  WARNING: NYC DOT facility ingest failed ({exc}); "
-                       f"scoring against existing facility_segments only.")
-            fac_stats = None
-            facilities_ok = False
+        else:
+            try:
+                fc = socrata.fetch_geojson(
+                    facility_ingest.NYC_DOT_DATASET,
+                    where=f"status='{facility_ingest.CURRENT_STATUS}'",
+                    no_cache=no_cache,
+                )
+                fac_stats = facility_ingest.ingest_facilities(conn, fc)
+                facilities_ok = True
+            except Exception as exc:
+                conn.rollback()
+                typer.echo(f"  WARNING: NYC DOT facility ingest failed ({exc}); "
+                           f"scoring against existing facility_segments only.")
+                fac_stats = None
+                facilities_ok = False
 
-        score_stats = p3_quality_scoring.run(conn)
+        final_stats = p3_quality_scoring.run_final_pass(conn)
 
-    typer.echo("Phase 3 — facility data + quality scoring")
+    typer.echo("Phase 3 — facility data + quality scoring + cross-source dedup")
     if facilities_ok and fac_stats is not None:
         typer.echo(f"  facilities stored:   {fac_stats.stored}")
         typer.echo(f"  retired excluded:    {fac_stats.skipped_retired}")
         typer.echo(f"  by class:            {dict(sorted(fac_stats.by_class.items()))}")
-    typer.echo(f"  routes scored:       {score_stats.scored}")
-    typer.echo(f"  routes in coverage:  {score_stats.in_coverage}")
+    typer.echo(f"  routes scored:       {final_stats.scored}")
+    typer.echo(f"  routes in coverage:  {final_stats.in_coverage}")
+    typer.echo(f"  deduped (removed):   {final_stats.deduped}")
 
 
 @app.command()

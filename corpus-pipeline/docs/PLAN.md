@@ -189,7 +189,7 @@ followups: [<deferred work, with why>]
 
 ---
 
-### [ ] WP0 — Foundation, config, cache, migration 001
+### [x] WP0 — Foundation, config, cache, migration 001
 
 **Goal:** a runnable skeleton that can `migrate` a plain PostGIS DB and `stats`
 an empty corpus.
@@ -242,7 +242,7 @@ second `migrate` is a no-op; `stats` runs clean on the empty corpus.
 
 ---
 
-### [ ] WP1 — Phase 1: OSM bicycle route relations
+### [x] WP1 — Phase 1: OSM bicycle route relations
 
 **Goal:** OSM `route=bicycle` relations in `routes` with valid geometry,
 `match_quality=1.0`, attribution. Satisfies **AC#1**.
@@ -296,7 +296,7 @@ integration test.
 
 ---
 
-### [ ] WP2 — Phase 2: loose GPX / polyline sources, map-matched
+### [x] WP2 — Phase 2: loose GPX / polyline sources, map-matched
 
 **Goal:** NYSDOT state routes (clipped to metro) and manual GPX, map-matched via
 Valhalla, into `routes`.
@@ -336,7 +336,7 @@ semantics correct per source.
 
 ---
 
-### [ ] WP3 — Phase 3: facility data + quality scoring
+### [x] WP3 — Phase 3: facility data + quality scoring
 
 **Goal:** `facility_segments` populated and every `routes` row carrying scores;
 re-runnable.
@@ -385,7 +385,7 @@ has `protected_lane_fraction`, `greenway_fraction`, `facility_coverage_fraction`
 
 ---
 
-### [ ] WP4 — Phase 4: canon seeding + scored generation
+### [x] WP4 — Phase 4: canon seeding + scored generation
 
 **Goal:** canon rides + variants and kept generated loops in `routes`, gated by
 quality, deduped.
@@ -453,7 +453,7 @@ counter persists across runs.
 
 ---
 
-### [ ] WP5 — Final pass, docs, README, full E2E + teardown
+### [x] WP5 — Final pass, docs, README, full E2E + teardown
 
 **Goal:** the corpus assembled per the canonical run order, the two reference
 docs, the README, and a verified end-to-end satisfying all acceptance criteria.
@@ -572,9 +572,9 @@ retrying.
 
 ## Progress (orchestrator ticks these)
 
-- [ ] WP0 — Foundation, config, cache, migration 001
-- [ ] WP1 — Phase 1: OSM relations
-- [ ] WP2 — Phase 2: loose GPX
-- [ ] WP3 — Phase 3: facility scoring
-- [ ] WP4 — Phase 4: canon + generation
-- [ ] WP5 — Final pass, docs, README, E2E + teardown
+- [x] WP0 — Foundation, config, cache, migration 001
+- [x] WP1 — Phase 1: OSM relations
+- [x] WP2 — Phase 2: loose GPX
+- [x] WP3 — Phase 3: facility scoring
+- [x] WP4 — Phase 4: canon + generation
+- [x] WP5 — Final pass, docs, README, E2E + teardown

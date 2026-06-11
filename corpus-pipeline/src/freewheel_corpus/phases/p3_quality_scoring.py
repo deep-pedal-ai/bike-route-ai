@@ -288,6 +288,21 @@ class ScoringStats:
     ids: list[int] = field(default_factory=list)
 
 
+@dataclass
+class FinalPassStats:
+    """Counters returned by :func:`run_final_pass` (score + dedup).
+
+    - ``scored`` / ``in_coverage`` / ``ids`` — from the scoring sub-pass (so the
+      canon rows ingested in Phase 4 with NULL ``quality_score`` are now filled).
+    - ``deduped`` — rows hard-deleted by the full-table cross-source dedup pass.
+    """
+
+    scored: int = 0
+    in_coverage: int = 0
+    deduped: int = 0
+    ids: list[int] = field(default_factory=list)
+
+
 # Pull only the facility segments within the 15 m proximity of THIS route,
 # grouped by class, as WKB — so a route never loads the whole 24k-segment table.
 # ST_DWithin on geography is metres; equivalent to the projected 15 m buffer.
@@ -393,3 +408,59 @@ def run(
 
     conn.commit()
     return stats
+
+
+# --- WP5: the orchestrated FINAL pass (score THEN full-table dedup) ----------
+
+def run_final_pass(
+    conn: psycopg.Connection,
+    *,
+    coverage_geojson: dict[str, Any] | None = None,
+    facility_source: str = "nyc_dot",
+    settings: Settings | None = None,
+) -> FinalPassStats:
+    """The orchestrated final Phase-3 pass (WP5): score every row, THEN dedup.
+
+    The documented run order is
+    ``migrate → phase1 → phase2 → phase3 → phase4 → phase3``. The FINAL
+    ``phase3`` is this function. It runs in two sub-passes, in this order:
+
+    1. **Score** — :func:`run` recomputes the four score columns for EVERY route
+       in place, which fills the ``quality_score`` of the canon (and any
+       generated) rows that Phase 4 ingested with NULL scores. Scoring is
+       recompute-in-place, so re-running is naturally idempotent.
+    2. **Cross-source dedup** — :func:`p4.apply_dedup_pass` (no ``only_sources``
+       restriction, so the WHOLE table is in scope) finds overlapping pairs via
+       the pure WP1 overlap predicate, applies the ADR-0003 precedence ladder
+       (``canon > osm_relation > nysdot > usbrs > open_gpx > generated``),
+       **hard-deletes the loser**, and logs both IDs under ``skipped_duplicate``.
+
+    Order matters: scoring first guarantees every SURVIVING row carries a score
+    (a deleted loser's score is irrelevant). Deleting an OSM twin does not change
+    the surviving canon row's score (its score depends only on its own geometry +
+    facilities + source prior), so no re-score after dedup is needed.
+
+    Safe to re-run (the run order re-invokes ``phase3``): scoring is
+    recompute-in-place and a second dedup pass finds no remaining duplicates, so
+    it removes 0 and leaves scores stable.
+
+    ADR refs: ADR-0003 (dedup ladder + hard-delete), ADR-0002 (EPSG:32618).
+    """
+    from freewheel_corpus.phases import p4_canon_and_generation as p4
+
+    score_stats = run(
+        conn,
+        coverage_geojson=coverage_geojson,
+        facility_source=facility_source,
+        settings=settings,
+    )
+    # Full-table cross-source dedup: every source is a deletable candidate (no
+    # only_sources restriction), so canon↔osm marquee twins are resolved here.
+    deduped = p4.apply_dedup_pass(conn)
+
+    return FinalPassStats(
+        scored=score_stats.scored,
+        in_coverage=score_stats.in_coverage,
+        deduped=deduped,
+        ids=score_stats.ids,
+    )

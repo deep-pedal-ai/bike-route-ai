@@ -1,0 +1,6 @@
+branch=$(git symbolic-ref HEAD | sed 's|refs/heads/||')
+
+if [ "$branch" = "main" ]; then
+  echo "Direct push to main is not allowed. Open a PR instead."
+  exit 1
+fi

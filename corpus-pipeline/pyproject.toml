@@ -1,0 +1,38 @@
+[project]
+name = "freewheel-corpus"
+version = "0.1.0"
+description = "Freewheel bike-route corpus pipeline — OSM/NYSDOT/NYC-DOT ingest + scoring into PostGIS."
+requires-python = ">=3.12"
+dependencies = [
+    "httpx",
+    "tenacity",
+    "shapely",
+    "pyproj",
+    "geojson",
+    "gpxpy",
+    "psycopg[binary]",
+    "pydantic",
+    "pydantic-settings",
+    "typer",
+    "PyYAML",
+    "python-dotenv",
+]
+
+[project.scripts]
+freewheel-corpus = "freewheel_corpus.cli:app"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/freewheel_corpus"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

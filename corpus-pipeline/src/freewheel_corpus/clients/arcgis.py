@@ -1,0 +1,192 @@
+"""ArcGIS FeatureServer client — NYSDOT State Bike Routes, paginated + disk-cached.
+
+The NYSDOT State Bike Routes layer lives on the NY DOT GIS portal (verified live
+2026-06-11): ``gisportalny.dot.ny.gov/hostingny/rest/services`` (the ``/hostingny``
+host, NOT the dev/``/arcgis`` portal). The client appends the layer path
+``Framework/State_Bike_Routes/FeatureServer/0/query`` and requests ``f=geojson``.
+
+ArcGIS paginates a FeatureServer query with ``resultOffset`` / ``resultRecordCount``
+and signals more pages with ``properties.exceededTransferLimit: true`` on the
+GeoJSON response (or ``exceededTransferLimit`` at the top level on some servers);
+:meth:`ArcGISClient.fetch_all_features` walks every page and concatenates the
+features. Each page is disk-cached (:class:`DiskCache`) keyed on the query params,
+and a descriptive ``User-Agent`` is sent (mirrors the other clients).
+
+:func:`clip_feature_to_metro` intersects a feature's geometry with the metro
+boundary polygon and returns a single ``LineString`` (the longest connected
+component, like ``assemble_relation``) plus the feature's properties, or ``None``
+when the feature does not intersect metro. Returning a single ``LineString`` is a
+hard contract: Phase 2 feeds ``clipped.geom`` straight into ``match_route`` (which
+is LineString-only) and reads ``clipped.geom.coords[0]``.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+import httpx
+from shapely.geometry import LineString, MultiLineString, shape
+from shapely.geometry.base import BaseGeometry
+from shapely.ops import linemerge
+
+from freewheel_corpus.cache import DiskCache
+from freewheel_corpus.metro import load_metro_boundary
+
+# The State Bike Routes layer path appended to the services base URL.
+LAYER_PATH = "Framework/State_Bike_Routes/FeatureServer/0/query"
+
+# ArcGIS caps a single page; 1000 is the usual server maxRecordCount. We page
+# until exceededTransferLimit clears.
+PAGE_SIZE = 1000
+
+DEFAULT_USER_AGENT = "freewheel-corpus/0.1 (bike-route-ai; +https://github.com/deep-pedal-ai)"
+
+_CACHE_CLIENT = "arcgis"
+
+# (query_url, params) -> parsed GeoJSON dict
+Transport = Callable[[str, dict[str, Any]], Any]
+
+
+def _http_transport(timeout: float) -> Transport:
+    """Build the default HTTP transport: GET the FeatureServer query as GeoJSON."""
+
+    def _get(url: str, params: dict[str, Any]) -> Any:
+        resp = httpx.get(
+            url,
+            params=params,
+            headers={"User-Agent": DEFAULT_USER_AGENT},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    return _get
+
+
+class ArcGISClient:
+    """Paginated, disk-cached ArcGIS FeatureServer client (NYSDOT bike routes).
+
+    Parameters mirror the other clients: an injectable ``transport``
+    (``(url, params) -> geojson``) so tests avoid the network, and a
+    :class:`DiskCache` keyed on the page params so a re-run replays for free.
+    """
+
+    def __init__(
+        self,
+        cache: DiskCache | None = None,
+        *,
+        base_url: str = "https://gisportalny.dot.ny.gov/hostingny/rest/services",
+        transport: Transport | None = None,
+        timeout: float = 120.0,
+        page_size: int = PAGE_SIZE,
+    ) -> None:
+        self.cache = cache if cache is not None else DiskCache()
+        self.base_url = base_url
+        self.query_url = base_url.rstrip("/") + "/" + LAYER_PATH
+        self._transport = transport or _http_transport(timeout)
+        self.page_size = page_size
+
+    def _fetch_page(self, offset: int, *, no_cache: bool) -> Any:
+        params = {
+            "where": "1=1",
+            "outFields": "*",
+            "f": "geojson",
+            "resultOffset": offset,
+            "resultRecordCount": self.page_size,
+            "outSR": 4326,
+        }
+        request_key = {"client": _CACHE_CLIENT, "url": self.query_url, "params": params}
+
+        if not no_cache:
+            cached = self.cache.get(_CACHE_CLIENT, request_key)
+            if cached is not None:
+                return cached
+
+        payload = self._transport(self.query_url, params)
+        self.cache.set(_CACHE_CLIENT, request_key, payload)
+        return payload
+
+    def fetch_all_features(self, *, no_cache: bool = False) -> list[dict[str, Any]]:
+        """Walk every page via ``resultOffset`` and return the combined features.
+
+        Stops when a page reports no ``exceededTransferLimit`` (or returns fewer
+        than ``page_size`` features). Each page is cached independently.
+        """
+        features: list[dict[str, Any]] = []
+        offset = 0
+        while True:
+            payload = self._fetch_page(offset, no_cache=no_cache)
+            page = payload.get("features", []) or []
+            features.extend(page)
+
+            exceeded = bool(
+                payload.get("exceededTransferLimit")
+                or (payload.get("properties") or {}).get("exceededTransferLimit")
+            )
+            if not exceeded or not page:
+                break
+            offset += len(page)
+        return features
+
+
+# --- Clip to metro -----------------------------------------------------------
+
+@dataclass
+class ClippedFeature:
+    """A feature clipped to metro: a single ``LineString`` + its properties."""
+
+    geom: LineString
+    properties: dict[str, Any]
+
+
+def _longest_linestring(geom: BaseGeometry) -> LineString | None:
+    """Reduce a (possibly Multi) line geometry to its longest ``LineString``.
+
+    A polygon intersection commonly yields a ``MultiLineString``; Phase 2 needs a
+    single ``LineString`` (``match_route`` is LineString-only). We ``linemerge``
+    first (folds exactly-touching pieces) and then keep the longest component, the
+    same lossy-but-safe rule ``assemble_relation`` uses.
+    """
+    if geom.is_empty:
+        return None
+    if isinstance(geom, LineString):
+        return geom
+    if isinstance(geom, MultiLineString):
+        merged = linemerge(geom)
+        if isinstance(merged, LineString):
+            return merged if not merged.is_empty else None
+        if isinstance(merged, MultiLineString) and not merged.is_empty:
+            return max(merged.geoms, key=lambda g: g.length)
+        return None
+    # A GeometryCollection (mixed) — pull any line parts out.
+    lines = [g for g in getattr(geom, "geoms", []) if isinstance(g, LineString)]
+    if not lines:
+        return None
+    return max(lines, key=lambda g: g.length)
+
+
+def clip_feature_to_metro(
+    feature: dict[str, Any], boundary: BaseGeometry | None = None
+) -> ClippedFeature | None:
+    """Clip a GeoJSON feature's line geometry to the metro polygon.
+
+    Returns a :class:`ClippedFeature` (single longest ``LineString`` inside metro
+    + the feature's properties) or ``None`` when the feature does not intersect
+    the metro boundary. The boundary defaults to the committed
+    ``config/metro_boundary.geojson`` (loaded once per call; cheap).
+    """
+    geom_json = feature.get("geometry")
+    if not geom_json:
+        return None
+    geom = shape(geom_json)
+    metro = boundary if boundary is not None else load_metro_boundary()
+
+    if not geom.intersects(metro):
+        return None
+    clipped = geom.intersection(metro)
+    line = _longest_linestring(clipped)
+    if line is None or line.is_empty or len(line.coords) < 2:
+        return None
+    return ClippedFeature(geom=line, properties=feature.get("properties", {}) or {})

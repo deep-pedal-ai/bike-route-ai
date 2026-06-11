@@ -1,0 +1,25 @@
+{
+  "type": "Feature",
+  "properties": {
+    "name": "Freewheel metro query/clip boundary",
+    "coordinate_order": "[lon, lat] (RFC 7946) — the OPPOSITE of canon.yaml's [lat, lon]",
+    "note": "Single Polygon covering the 5 NYC boroughs + Hudson/Bergen NJ to Nyack/Piermont (9W) + Westchester to ~Peekskill + Rockland + Nassau. Every vertex lies within the metro-bounds guard (lat 40-42, lon -75..-73). This is the QUERY/CLIP boundary, not the routing extent — a self-hosted ORS/Valhalla graph must cover the bbox of ALL stored route geometry, which can extend beyond this polygon."
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [-74.30, 40.45],
+        [-74.27, 40.95],
+        [-74.10, 41.25],
+        [-73.95, 41.33],
+        [-73.80, 41.30],
+        [-73.70, 41.10],
+        [-73.45, 40.95],
+        [-73.40, 40.55],
+        [-73.90, 40.50],
+        [-74.30, 40.45]
+      ]
+    ]
+  }
+}

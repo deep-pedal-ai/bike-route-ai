@@ -17,9 +17,15 @@ the raw incident account.
   from the session transcript) but **does not run as-is** — ~7 modules + the
   WP0–WP3 tests/fixtures + `pyproject.toml` were lost and were deliberately **not
   fabricated**. Rebuilding them was paused at your request ("secure + hand off").
-- 🔑 **Best full-recovery shot: iCloud Recently-Deleted** (untried). If it has the
-  `deeppedal/` tree, it restores the *exact* originals (`.git`, all tests,
-  fixtures, `.env`) in one step.
+- ❌ **No local backup exists (VERIFIED 2026-06-11).** The earlier "try iCloud first"
+  hope was wrong — checked on the machine: `~/Documents` is **not** synced to iCloud
+  ("Desktop & Documents Folders" is off, no `Documents` folder in iCloud Drive
+  storage), **Time Machine** has no destination configured, and APFS has only
+  `os.update` snapshots (no user-data snapshot). Google Drive exists but the project
+  lived under `~/Documents`, not inside it. So the deleted tree was local-only and is
+  **not** recoverable from a backup. The reconstruction below + the live DB are the
+  recovery basis. (Undelete/file-carving is a low-odds last resort: APFS SSD + TRIM
+  zeroes freed blocks fast, and writes since the deletion lower the odds further.)
 
 ---
 
@@ -109,19 +115,21 @@ a wrong guess masquerading as the original is worse than an honest gap):
 
 ## Recovery routes (in recommended order)
 
-1. **Try iCloud first — untried, could restore EVERYTHING.** `~/Documents` is the
-   iCloud "Documents" sync location. `rm` skips the local Trash, but iCloud keeps a
-   **30-day Recently-Deleted** store. Go to <https://www.icloud.com> → iCloud Drive
-   → **Recently Deleted**, and check synced devices. If the `deeppedal/` tree is
-   there, restoring it returns the exact `.git`, every test, every fixture, and the
-   original `.env` — strictly better than a rebuild.
+0. **Backups are exhausted (verified 2026-06-11).** iCloud has no copy (`~/Documents`
+   not synced — "Desktop & Documents Folders" off), Time Machine isn't configured, and
+   APFS has no user-data snapshot. Worth a 2-min self-check anyway: <https://www.icloud.com>
+   → Drive → **Recently Deleted**; and name → **iCloud Settings → Data Recovery → Restore
+   Files**; and Google Drive → **Trash**. Expected empty. Undelete tools (Disk Drill etc.)
+   are a low-odds last resort (APFS SSD + TRIM); only worth it if you stop writing to the
+   disk and scan from another boot. **Proceed assuming no backup restore.**
+1. **The pushed branch is the off-machine copy of the reconstruction** —
+   `feat/corpus-pipeline-reconstructed` on `deep-pedal-ai/bike-route-ai`.
 2. **Use the remote clone** at `deeppedal/_remote-restore/` for the serving-app
-   monorepo + git history. To make `bike-route-ai` a real repo again you can copy
-   its `.git` back, or re-init and re-add the remote.
-3. **Rebuild the missing modules** (only if iCloud fails). They're well-specified:
-   the live endpoints/field-mappings are documented in `PLAN.md` + this session's
-   subagent reports, the schema is in `001_init.sql`, and the live DB is the oracle
-   to re-verify against. This is the path the orchestrator paused.
+   monorepo + git history.
+3. **Rebuild the missing modules.** They're well-specified: the live endpoints/
+   field-mappings are documented in `PLAN.md` + this session's subagent reports, the
+   schema is in `001_init.sql` (verified exact vs the live DB), and the live DB is the
+   oracle to re-verify against. This is the path the orchestrator paused.
 
 ## To get the pipeline RUNNING again (if you choose route 3)
 

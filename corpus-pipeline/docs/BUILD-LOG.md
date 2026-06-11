@@ -115,3 +115,83 @@ Stronger-reviewer pass on PLAN.md surfaced four issues, all fixed:
 > ```
 
 _(none yet)_
+
+---
+
+## 2026-06-11 — Phase A: restore runnable state after data-loss [subagent]
+
+Rebuilt the ~7 lost modules + config artifacts + tests so the reconstructed
+pipeline runs again; proved correctness by reproducing the live-DB oracle on the
+isolated Neon `test` branch (`TEST_DATABASE_URL`). Never wrote to `DATABASE_URL`
+(the corpus); the oracle phases ran with `DATABASE_URL` overridden to the
+test-branch value, verified via `stats` (empty) before each run.
+
+### Rebuilt (from docs + caller interfaces + the export oracle)
+- `pyproject.toml` — uv / Python 3.12, hatchling src-layout, console script
+  `freewheel-corpus = freewheel_corpus.cli:app`, deps per RECOVERY.md. `uv sync` ✓.
+- `src/freewheel_corpus/migrations.py` — `run_migrations(conn)` applies
+  `db/migrations/*.sql` in filename order, records each in `schema_migrations`
+  (`filename` PK, `applied_at`), idempotent (2nd run → `[]`), caller commits.
+- `src/freewheel_corpus/clients/arcgis.py` — `ArcGISClient` (NYSDOT
+  `/hostingny` FeatureServer/0, `f=geojson`, `resultOffset`/`exceededTransferLimit`
+  paging, disk-cached) + `clip_feature_to_metro` → single longest `LineString` in
+  metro (p2 contract) or `None`.
+- `src/freewheel_corpus/clients/socrata.py` — `SocrataClient.fetch_geojson(dataset,
+  where=, no_cache=)`, `$limit`/`$offset` paging, server-side `$where`, disk-cached.
+- `src/freewheel_corpus/phases/facility_ingest.py` — `mzxg-pwib`,
+  `facilitycl` I→protected/II→lane/III→sharrow/L→other, `grnwy='Greenway'`
+  overrides → greenway, unknown→other+logged warning, `status='Current'` filter,
+  `boro` code→borough name, geom as `MultiLineString`, recompute-in-place (delete
+  source rows then insert; idempotent).
+- `src/freewheel_corpus/config/metro_boundary.geojson` (+ `.README`) — single
+  `[lon,lat]` Polygon Feature; tuned so NYSDOT clips to EXACTLY 2 (OBJECTID 821
+  SBR9 + 813 SBR25A) and OSM lands ~126.
+- `src/freewheel_corpus/config/nyc_coverage.geojson` — 5-borough water-included
+  FeatureCollection from `wh2p-dxnf`.
+- `tests/fixtures/ors_directions_central_park.json` — re-captured live (key set);
+  exact oracle match (dist 4.639 km, ascent 81.7, descent 70.9).
+
+### Tests
+- Reconstructed WP0-WP3 tests: `test_migrations.py` (apply+idempotent, DB),
+  `test_arcgis.py` (pagination + clip-to-single-LineString + Multi-reduce),
+  `test_socrata.py` (paging + cache replay), `test_facility_ingest.py`
+  (I/II/III/L map, greenway override, unknown→other, retired filter, DB ingest,
+  idempotent), `test_p3_scoring.py` (coverage-normalization mandated test +
+  composite). Still-missing (not reconstructed): WP1 assembly/overpass-throttle
+  unit tests, WP2 matching/resample/gpx unit tests, WP1 integration test — the
+  underlying modules are intact and exercised live by the oracle run.
+- `uv run pytest` → **50 passed** (33 pre-existing incl. WP4 DB + ORS fixtures;
+  17 new).
+
+### Oracle reproduction (TEST_DATABASE_URL; live OSM/ArcGIS/Socrata/Valhalla, disk-cached)
+- `migrate` ✓ (001 applied). `phase1` → 126 osm_relation stored (oracle 125; +1
+  OSM drift). `phase2` → 2 nysdot (SBR 9 & 25A), 0 failed/oversize. `phase3` →
+  the cli invocation ingested + committed facility_segments 23,807 (oracle 23,807,
+  classes byte-exact: greenway 5193 / lane 9112 / other 312 / protected 5096 /
+  sharrow 4094; boroughs exact), but I killed the cli run during the slow per-route
+  scoring loop (exit 144); the killed scoring rolled back cleanly (scored=0), then
+  scoring completed via a direct call to the SAME `p3_quality_scoring.run(conn)`
+  the cli invokes (identical default args) → 128 routes scored, quality_score
+  min=0.300 avg=0.496 max=0.900 (oracle 0.300/0.495/0.900); 97 in coverage
+  (oracle 96). Scoring is UPDATE-only/idempotent, so the kill+resume cannot
+  double-apply.
+- gate: **pass** — NYSDOT==2 firm constraint met; facilities exact; all scored;
+  score distribution matches.
+
+### Surprises / followups
+- `cli` `_settings()` reads `DATABASE_URL` with no test flag → every oracle phase
+  must override `DATABASE_URL` to the test value; verified via `stats` first.
+- `ingest_facilities` per-row insert over remote Neon is slow (~min) for 23,807
+  rows but correct; a future `executemany`/`COPY` would speed the live run. Did
+  not change it (behavior verified, tests green). Did NOT run phase4 (not part of
+  the oracle; needs ORS quota).
+- During the rebuild a single `Write` used a mis-cased path
+  (`Codesmith_AIml_notes`); APFS is case-insensitive so it aliased onto the real
+  `Codesmith_AIML_notes` dir (verified `find -iname` = one physical directory, no
+  stray tree). Same error class as the original incident — flagged; no harm. All
+  subsequent paths used the correct casing.
+- Final `uv run pytest` (50 passed, 0 skipped — the DB-backed tests exercised
+  TEST_DATABASE_URL, not skipped) reset the test branch via the `clean_db`
+  fixture, so the oracle-reproduction rows are no longer queryable on the branch;
+  the comparison counts are captured above. Teardown is orchestrator-owned.
+

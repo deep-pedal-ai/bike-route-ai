@@ -5,9 +5,12 @@ export default function App() {
   const [routes, setRoutes] = useState<Route[]>([]);
 
   useEffect(() => {
-    fetch('/api/routes')
-      .then((r) => r.json())
-      .then((data) => setRoutes(data.routes));
+    const fetchRoutes = async () => {
+      const res = await fetch('/api/routes');
+      const data = await res.json();
+      setRoutes(data.routes);
+    };
+    fetchRoutes();
   }, []);
 
   return (

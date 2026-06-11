@@ -1,0 +1,11 @@
+data/raw/
+data/manual/*
+!data/manual/usbrs/.gitkeep
+!data/manual/open_gpx/.gitkeep
+.env
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+# Local corpus exports (regenerable from the DB; secured separately)
+exports/

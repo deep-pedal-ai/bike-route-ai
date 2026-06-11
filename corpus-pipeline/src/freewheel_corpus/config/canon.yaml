@@ -1,0 +1,483 @@
+# DRAFT — every coordinate requires human verification before ingestion
+#
+# These ~40 marquee NYC-metro rides are a best-effort DRAFT (Phase 4 / WP4). The
+# coordinates are HUMAN-ENTERED ESTIMATES from map knowledge, NOT survey-grade —
+# a meaningful fraction will route to a distance OUTSIDE the ±25% gate on the
+# first live run and be SKIPPED + logged (this is EXPECTED, PLAN §11). A human
+# verifies each coordinate (and tunes the waypoints so ORS routes the intended
+# corridor) before a re-run promotes the skipped entries.
+#
+# CONVENTION (Q5): coordinates here are HUMAN [lat, lon] — latitude FIRST. Code
+# swaps to [lon, lat] in exactly one place (p4.latlon_to_lonlat) with a metro-
+# bounds guard. This is the OPPOSITE order from config/metro_boundary.geojson
+# (RFC 7946 [lon, lat]). Do not transpose.
+#
+# Each entry:
+#   slug:        stable id (source_id = "{slug}:{variant_name}")
+#   name:        human label
+#   start:       [lat, lon] start point
+#   waypoints:   [[lat, lon], ...] intermediate points shaping the route
+#   expected_km: the routed distance we EXPECT (for out_and_back this is the FULL
+#                round-trip distance — the ±25% gate compares against it)
+#   out_and_back: true → a return leg back to the start is appended (Q6b; the
+#                flag is persisted into routes.tags)
+#   variants:    length/direction variants, each with its own name + expected_km
+#                (and optionally overriding waypoints / out_and_back)
+
+rides:
+  # --- Manhattan ------------------------------------------------------------
+  - slug: central-park-loop
+    name: Central Park Loop
+    start: [40.7677, -73.9718]      # Engineers' Gate, E 90th / 5th Ave
+    waypoints:
+      - [40.7969, -73.9582]         # North Woods / Central Park North
+      - [40.7812, -73.9665]         # West Drive
+      - [40.7677, -73.9718]         # back to the start (full loop)
+    expected_km: 10.0
+    out_and_back: false
+    variants:
+      - { name: full, expected_km: 10.0 }
+      - { name: lower-loop, expected_km: 2.5, waypoints: [[40.7700, -73.9760], [40.7677, -73.9718]] }
+
+  - slug: manhattan-perimeter
+    name: Manhattan Perimeter (Greenway)
+    start: [40.7060, -74.0170]      # Battery Park
+    waypoints:
+      - [40.7440, -74.0100]         # Hudson River Greenway / Chelsea
+      - [40.7770, -73.9920]         # Riverside Park
+      - [40.8500, -73.9460]         # Harlem / Inwood
+      - [40.8030, -73.9330]         # Harlem River Greenway / FDR
+      - [40.7110, -73.9760]         # East River Greenway / South St
+      - [40.7060, -74.0170]         # back to Battery
+    expected_km: 51.0
+    out_and_back: false
+    variants:
+      - { name: full, expected_km: 51.0 }
+
+  - slug: hudson-river-greenway
+    name: Hudson River Greenway
+    start: [40.7060, -74.0170]      # Battery Park
+    waypoints:
+      - [40.7770, -73.9920]         # Riverside Park
+      - [40.8500, -73.9460]         # Dyckman / Inwood
+    expected_km: 22.0
+    out_and_back: true              # ride up and back
+    variants:
+      - { name: up-and-back, expected_km: 22.0 }
+      - { name: to-chelsea, expected_km: 9.0, waypoints: [[40.7480, -74.0090]] }
+
+  - slug: east-river-greenway
+    name: East River Greenway
+    start: [40.7110, -73.9760]      # South Street Seaport
+    waypoints:
+      - [40.7740, -73.9420]         # E 90s / Carl Schurz Park
+    expected_km: 16.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 16.0 }
+
+  # --- Brooklyn -------------------------------------------------------------
+  - slug: prospect-park-loop
+    name: Prospect Park Loop
+    start: [40.6712, -73.9700]      # Grand Army Plaza
+    waypoints:
+      - [40.6602, -73.9690]         # south end / lake
+      - [40.6620, -73.9740]         # west drive
+      - [40.6712, -73.9700]         # back to start
+    expected_km: 5.6
+    out_and_back: false
+    variants:
+      - { name: full, expected_km: 5.6 }
+      - { name: double, expected_km: 11.2, waypoints: [[40.6602, -73.9690], [40.6712, -73.9700], [40.6602, -73.9690], [40.6712, -73.9700]] }
+
+  - slug: brooklyn-waterfront-greenway
+    name: Brooklyn Waterfront Greenway
+    start: [40.7000, -73.9970]      # Brooklyn Bridge Park / DUMBO
+    waypoints:
+      - [40.6730, -74.0150]         # Red Hook
+      - [40.6470, -74.0150]         # Sunset Park / Bush Terminal
+    expected_km: 14.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 14.0 }
+
+  - slug: coney-island-shore-pkwy
+    name: Coney Island via Shore Parkway Greenway
+    start: [40.6020, -73.9420]      # Sheepshead Bay
+    waypoints:
+      - [40.5790, -73.9610]         # Coney Island boardwalk approach
+      - [40.5760, -73.9840]         # Coney Island / Sea Gate end
+    expected_km: 12.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 12.0 }
+
+  - slug: ocean-parkway-greenway
+    name: Ocean Parkway Greenway
+    start: [40.6450, -73.9720]      # Prospect Park SW / Ocean Pkwy head
+    waypoints:
+      - [40.5780, -73.9680]         # Coney Island / Brighton
+    expected_km: 16.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 16.0 }
+
+  - slug: floyd-bennett-field
+    name: Floyd Bennett Field
+    start: [40.5900, -73.8910]      # Floyd Bennett Field entrance
+    waypoints:
+      - [40.5840, -73.8870]         # runways / loop
+      - [40.5900, -73.8910]
+    expected_km: 8.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 8.0 }
+
+  - slug: jamaica-bay-rockaways
+    name: Jamaica Bay + Rockaways
+    start: [40.6160, -73.8220]      # Broad Channel / Jamaica Bay Wildlife Refuge
+    waypoints:
+      - [40.5920, -73.8150]         # Rockaway boardwalk (east)
+      - [40.5830, -73.8350]         # Rockaway Beach
+    expected_km: 20.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 20.0 }
+
+  # --- Queens ---------------------------------------------------------------
+  - slug: flushing-meadows
+    name: Flushing Meadows Corona Park
+    start: [40.7460, -73.8440]      # Unisphere
+    waypoints:
+      - [40.7370, -73.8430]         # Meadow Lake loop
+      - [40.7460, -73.8440]
+    expected_km: 7.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 7.0 }
+
+  - slug: kissena-cunningham
+    name: Kissena - Cunningham Park Corridor
+    start: [40.7470, -73.8070]      # Kissena Park
+    waypoints:
+      - [40.7330, -73.7670]         # Kissena Corridor Park
+      - [40.7330, -73.7660]         # Cunningham Park
+    expected_km: 12.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 12.0 }
+
+  - slug: rockaway-boardwalk
+    name: Rockaway Beach Boardwalk
+    start: [40.5830, -73.8350]      # Beach 90s
+    waypoints:
+      - [40.5780, -73.8700]         # Beach 116th
+    expected_km: 9.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 9.0 }
+
+  # --- The Bronx ------------------------------------------------------------
+  - slug: city-island
+    name: City Island
+    start: [40.8470, -73.7870]      # City Island Bridge
+    waypoints:
+      - [40.8420, -73.7860]         # City Island Ave
+      - [40.8390, -73.7850]         # Belden Point
+    expected_km: 6.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 6.0 }
+
+  - slug: van-cortlandt-south-county
+    name: Van Cortlandt + South County Trailway
+    start: [40.8930, -73.8980]      # Van Cortlandt Park
+    waypoints:
+      - [40.9250, -73.8600]         # north into Yonkers
+      - [40.9700, -73.8650]         # South County Trailway
+    expected_km: 18.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 18.0 }
+
+  - slug: bronx-river-pathway
+    name: Bronx River Pathway
+    start: [40.8500, -73.8650]      # Bronx Park / botanical garden
+    waypoints:
+      - [40.8870, -73.8670]         # northward
+      - [40.9300, -73.8680]         # toward Westchester line
+    expected_km: 14.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 14.0 }
+
+  - slug: pelham-bay-park
+    name: Pelham Bay Park Loop
+    start: [40.8610, -73.8060]      # Pelham Bay Park
+    waypoints:
+      - [40.8730, -73.7950]         # Orchard Beach
+      - [40.8610, -73.8060]
+    expected_km: 9.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 9.0 }
+
+  # --- Staten Island --------------------------------------------------------
+  - slug: staten-island-south-shore
+    name: Staten Island South Shore Greenway
+    start: [40.5560, -74.1530]      # Great Kills Park
+    waypoints:
+      - [40.5240, -74.2000]         # Wolfe's Pond Park
+      - [40.5100, -74.2400]         # Tottenville
+    expected_km: 16.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 16.0 }
+
+  - slug: staten-island-north-shore
+    name: Staten Island North Shore (St. George - Snug Harbor)
+    start: [40.6430, -74.0740]      # St. George Ferry
+    waypoints:
+      - [40.6420, -74.1020]         # Snug Harbor
+    expected_km: 8.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 8.0 }
+
+  # --- Islands --------------------------------------------------------------
+  - slug: roosevelt-island
+    name: Roosevelt Island Loop
+    start: [40.7610, -73.9500]      # Roosevelt Island tram base
+    waypoints:
+      - [40.7700, -73.9430]         # Lighthouse Park (north)
+      - [40.7530, -73.9580]         # Southpoint Park (south)
+      - [40.7610, -73.9500]
+    expected_km: 6.5
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 6.5 }
+
+  - slug: governors-island
+    name: Governors Island Loop
+    start: [40.6890, -74.0170]      # Governors Island ferry landing
+    waypoints:
+      - [40.6890, -74.0160]         # promenade loop
+      - [40.6860, -74.0140]
+      - [40.6890, -74.0170]
+    expected_km: 3.6
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 3.6 }
+
+  # --- New Jersey (Hudson / Palisades) --------------------------------------
+  - slug: river-road-nj
+    name: River Road NJ (Edgewater - Fort Lee)
+    start: [40.8270, -73.9750]      # Edgewater waterfront
+    waypoints:
+      - [40.8500, -73.9690]         # under the GWB
+      - [40.8620, -73.9620]         # Fort Lee
+    expected_km: 10.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 10.0 }
+
+  - slug: 9w-to-piermont
+    name: 9W to Piermont
+    start: [40.8510, -73.9520]      # GWB / Fort Lee NJ side
+    waypoints:
+      - [40.9890, -73.9170]         # 9W north
+      - [41.0410, -73.9180]         # Piermont
+    expected_km: 42.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 42.0 }
+
+  - slug: 9w-to-nyack
+    name: 9W to Nyack
+    start: [40.8510, -73.9520]      # GWB / Fort Lee NJ side
+    waypoints:
+      - [40.9890, -73.9170]         # 9W north
+      - [41.0910, -73.9180]         # Nyack
+    expected_km: 56.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 56.0 }
+
+  - slug: state-line-lookout
+    name: State Line Lookout (9W)
+    start: [40.8510, -73.9520]      # GWB / Fort Lee NJ side
+    waypoints:
+      - [40.9890, -73.9170]         # 9W north
+      - [41.0130, -73.9060]         # State Line Lookout
+    expected_km: 36.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 36.0 }
+
+  - slug: river-road-palisades
+    name: River Road through the Palisades
+    start: [40.8620, -73.9620]      # Fort Lee
+    waypoints:
+      - [40.8980, -73.9430]         # Palisades Interstate Park river road
+      - [40.9300, -73.9230]         # Alpine
+    expected_km: 22.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 22.0 }
+
+  # --- Westchester / Rockland ----------------------------------------------
+  - slug: old-croton-aqueduct
+    name: Old Croton Aqueduct Trail (mixed-surface)
+    start: [40.9920, -73.8920]      # Yonkers
+    waypoints:
+      - [41.0350, -73.8680]         # Hastings-on-Hudson
+      - [41.0780, -73.8680]         # Dobbs Ferry
+    expected_km: 20.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 20.0 }
+
+  - slug: bronx-river-pathway-westchester
+    name: Bronx River Pathway (Westchester)
+    start: [40.9300, -73.8680]      # county line
+    waypoints:
+      - [40.9650, -73.8700]         # Bronxville
+      - [41.0330, -73.7660]         # Scarsdale / White Plains
+    expected_km: 24.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 24.0 }
+
+  - slug: south-county-trailway
+    name: South County Trailway
+    start: [40.9700, -73.8650]      # Yonkers trail head
+    waypoints:
+      - [41.0500, -73.8550]         # Elmsford
+      - [41.1170, -73.8350]         # Tarrytown / Eastview
+    expected_km: 30.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 30.0 }
+
+  - slug: north-county-trailway
+    name: North County Trailway
+    start: [41.1170, -73.8350]      # Eastview
+    waypoints:
+      - [41.2050, -73.8390]         # Millwood
+      - [41.2700, -73.8210]         # Yorktown
+    expected_km: 34.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 34.0 }
+
+  - slug: rockefeller-carriage-roads
+    name: Rockefeller State Park carriage roads (gravel)
+    start: [41.1080, -73.8390]      # Rockefeller State Park Preserve
+    waypoints:
+      - [41.1180, -73.8330]         # carriage roads
+      - [41.1240, -73.8260]
+      - [41.1080, -73.8390]
+    expected_km: 12.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 12.0 }
+
+  - slug: bear-mountain-via-9w
+    name: Bear Mountain via 9W (long classic)
+    start: [41.0910, -73.9180]      # Nyack
+    waypoints:
+      - [41.2100, -73.9750]         # 9W north / Haverstraw
+      - [41.3120, -73.9880]         # Bear Mountain Bridge approach
+    expected_km: 64.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 64.0 }
+
+  # --- Long Island ----------------------------------------------------------
+  - slug: jones-beach-wantagh-bethpage
+    name: Jones Beach via Wantagh / Bethpage Bikeway
+    start: [40.7440, -73.4820]      # Bethpage State Park
+    waypoints:
+      - [40.6680, -73.5100]         # Wantagh Parkway bikeway
+      - [40.6020, -73.5070]         # Jones Beach
+    expected_km: 28.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 28.0 }
+
+  - slug: bethpage-bikeway
+    name: Bethpage Bikeway (north section)
+    start: [40.7440, -73.4820]      # Bethpage State Park
+    waypoints:
+      - [40.7820, -73.4830]         # Woodbury / Trail View
+    expected_km: 9.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 9.0 }
+
+  - slug: hempstake-lake-loop
+    name: Hempstead Lake State Park
+    start: [40.6680, -73.6480]      # Hempstead Lake State Park
+    waypoints:
+      - [40.6620, -73.6520]         # lake loop
+      - [40.6680, -73.6480]
+    expected_km: 5.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 5.0 }
+
+  # --- Additional metro classics (judgment) ---------------------------------
+  - slug: shore-road-bay-ridge
+    name: Shore Road Greenway (Bay Ridge)
+    start: [40.6340, -74.0290]      # Owl's Head Park
+    waypoints:
+      - [40.6180, -74.0350]         # under the Verrazzano
+    expected_km: 6.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 6.0 }
+
+  - slug: randalls-island
+    name: Randalls Island Connector Loop
+    start: [40.7960, -73.9220]      # Randalls Island
+    waypoints:
+      - [40.8000, -73.9180]         # island greenway
+      - [40.7920, -73.9270]
+      - [40.7960, -73.9220]
+    expected_km: 7.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 7.0 }
+
+  - slug: highbridge-park
+    name: Highbridge + Washington Heights
+    start: [40.8420, -73.9300]      # High Bridge (Manhattan side)
+    waypoints:
+      - [40.8500, -73.9270]         # Highbridge Park
+      - [40.8590, -73.9260]         # Fort Washington
+    expected_km: 6.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 6.0 }
+
+  - slug: forest-park-queens
+    name: Forest Park Drive (Queens)
+    start: [40.7020, -73.8460]      # Forest Park
+    waypoints:
+      - [40.7010, -73.8600]         # park drive
+      - [40.7020, -73.8460]
+    expected_km: 6.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 6.0 }
+
+  - slug: marine-park-greenway
+    name: Marine Park Greenway (Brooklyn)
+    start: [40.5980, -73.9210]      # Marine Park
+    waypoints:
+      - [40.5900, -73.9120]         # Salt marsh nature trail
+      - [40.5980, -73.9210]
+    expected_km: 6.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 6.0 }

@@ -1,7 +1,9 @@
 {
   "name": "bike-route-ai",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "concurrently \"npm run dev -w packages/server\" \"npm run dev -w packages/client\"",
     "build": "npm run build -w packages/shared && npm run build -w packages/server && npm run build -w packages/client",
@@ -12,6 +14,7 @@
   "devDependencies": {
     "concurrently": "^9.0.1",
     "eslint": "^9.9.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "husky": "^9.1.5",
     "lint-staged": "^15.2.9",
     "typescript": "^5.5.0",

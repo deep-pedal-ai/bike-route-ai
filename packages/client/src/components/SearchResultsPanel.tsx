@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { AlertCircle, AlertTriangle, Compass, MapPinOff, X } from 'lucide-react';
 import RouteResultCard from './RouteResultCard';
 import LoadingSkeleton from './LoadingSkeleton';
@@ -9,6 +10,8 @@ type SearchResultsPanelProps = {
   results: RouteSearchResult[] | null;
   /** Ids (string-normalized) of results whose route has geometry on the map. */
   mappableIds: Set<string>;
+  /** Id (string-normalized) of the currently open route, for aria-current. */
+  selectedId?: string | null;
   filtersRelaxed: boolean;
   isLoading: boolean;
   error: string | null;
@@ -28,6 +31,7 @@ type SearchResultsPanelProps = {
 export default function SearchResultsPanel({
   results,
   mappableIds,
+  selectedId = null,
   filtersRelaxed,
   isLoading,
   error,
@@ -35,6 +39,14 @@ export default function SearchResultsPanel({
   onSelect,
   onClose,
 }: SearchResultsPanelProps) {
+  // Move focus into the panel when it opens so keyboard + screen-reader users
+  // land on the results, not back at the top of the document (focus is restored
+  // to the search field by the parent on close).
+  const panelRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
+
   const headline = isLoading
     ? 'Searching…'
     : error !== null
@@ -43,8 +55,10 @@ export default function SearchResultsPanel({
 
   return (
     <aside
+      ref={panelRef}
+      tabIndex={-1}
       aria-label="Route search results"
-      className="search-panel-motion absolute bottom-3 left-3 top-3 z-20 flex w-[min(26rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-lg border border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] shadow-[0_20px_55px_rgba(16,20,15,0.42)] backdrop-blur-md"
+      className="search-panel-motion absolute bottom-3 left-3 top-48 z-20 flex w-[min(26rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-lg border border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] shadow-[0_20px_55px_rgba(16,20,15,0.42)] outline-none backdrop-blur-md"
     >
       <header className="flex items-center justify-between gap-3 border-b border-[var(--color-bark-border)] px-4 py-3">
         <div className="min-w-0">
@@ -97,8 +111,22 @@ export default function SearchResultsPanel({
               const id = String(rawResult.id);
               const rank = index + 1;
 
+              // A result whose route has no geometry: shown for context, but
+              // dimmed and non-interactive with a clear "no map preview" hint
+              // above the (faded) card — kept out of the card so it never
+              // collides with the card's own corner badges (D6).
               if (!mappableIds.has(id)) {
-                return <UnmappableCard key={id} result={rawResult} rank={rank} />;
+                return (
+                  <div key={id} className="rounded-lg">
+                    <div className="mb-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--color-bark-border)] bg-[var(--color-bark)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-sage-text)]">
+                      <MapPinOff className="h-3 w-3" />
+                      No map preview
+                    </div>
+                    <div className="pointer-events-none opacity-60">
+                      <RouteResultCard result={rawResult} rank={rank} />
+                    </div>
+                  </div>
+                );
               }
 
               const select = () => onSelect(id);
@@ -115,13 +143,18 @@ export default function SearchResultsPanel({
                   role="button"
                   tabIndex={0}
                   aria-label={`Focus ${rawResult.name} on the map`}
+                  aria-current={id === selectedId ? 'true' : undefined}
                   onClick={select}
                   onKeyDown={onKeyDown}
                   onMouseEnter={() => onHover(id)}
                   onMouseLeave={() => onHover(null)}
                   onFocus={() => onHover(id)}
                   onBlur={() => onHover(null)}
-                  className="block rounded-lg outline-none transition duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[var(--color-leaf)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-forest)]"
+                  className={`block rounded-lg outline-none transition duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[var(--color-leaf)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-forest)] ${
+                    id === selectedId
+                      ? 'ring-2 ring-[var(--color-leaf)] ring-offset-2 ring-offset-[var(--color-forest)]'
+                      : ''
+                  }`}
                 >
                   <RouteResultCard result={rawResult} rank={rank} />
                 </div>
@@ -131,21 +164,5 @@ export default function SearchResultsPanel({
         ) : null}
       </div>
     </aside>
-  );
-}
-
-// A result whose route has no geometry: shown for context, but dimmed and
-// non-interactive with a clear "no map preview" hint.
-function UnmappableCard({ result, rank }: { result: RouteSearchResult; rank: number }) {
-  return (
-    <div className="relative rounded-lg opacity-70">
-      <div className="pointer-events-none">
-        <RouteResultCard result={result} rank={rank} />
-      </div>
-      <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-[var(--color-bark-border)] bg-[var(--color-bark)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-sage-text)]">
-        <MapPinOff className="h-3 w-3" />
-        No map preview
-      </span>
-    </div>
   );
 }

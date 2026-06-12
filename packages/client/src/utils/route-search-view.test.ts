@@ -120,4 +120,12 @@ describe('routeOpacityExpression', () => {
     // Every other route is dimmed.
     expect(evaluate(expr, { id: 286 })).toBe(DIM_OPACITY);
   });
+
+  it('accepts custom full/dim opacities (used by the casing layer)', () => {
+    expect(routeOpacityExpression(null, 0.72, 0.08)).toBe(0.72);
+
+    const expr = routeOpacityExpression('4', 0.72, 0.08);
+    expect(evaluate(expr, { id: 4 })).toBe(0.72);
+    expect(evaluate(expr, { id: 286 })).toBe(0.08);
+  });
 });

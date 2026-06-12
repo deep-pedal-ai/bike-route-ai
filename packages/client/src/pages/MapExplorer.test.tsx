@@ -387,4 +387,77 @@ describe('MapExplorer — map-tab search', () => {
     expect(screen.queryByRole('complementary', { name: /route search results/i })).not.toBeInTheDocument();
     expect(routeLayerProps()?.filter).toEqual(['all']);
   });
+
+  it('also dims the casing of non-hovered routes on hover', async () => {
+    mockedSearchRoutes.mockResolvedValue({
+      results: [searchResult('286', 'Aqueduct Trail')],
+      filtersRelaxed: false,
+    });
+
+    renderAt('/map');
+    submitSearch('aqueduct');
+    await screen.findByText('Aqueduct Trail');
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: /focus aqueduct trail/i }));
+    expect((casingLayerProps()?.paint as Record<string, unknown>)['line-opacity']).toEqual(
+      routeOpacityExpression('286', 0.72, 0.08),
+    );
+  });
+
+  it('Escape closes the panel and restores the FilterBar', async () => {
+    mockedSearchRoutes.mockResolvedValue({
+      results: [searchResult('286', 'Aqueduct Trail')],
+      filtersRelaxed: false,
+    });
+
+    renderAt('/map');
+    submitSearch('aqueduct');
+    await screen.findByText('Aqueduct Trail');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(
+      screen.queryByRole('complementary', { name: /route search results/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'canon' })).toBeInTheDocument();
+  });
+
+  it('moves focus into the panel on open and back to the search field on close', async () => {
+    mockedSearchRoutes.mockResolvedValue({
+      results: [searchResult('286', 'Aqueduct Trail')],
+      filtersRelaxed: false,
+    });
+
+    renderAt('/map');
+    submitSearch('aqueduct');
+    await screen.findByText('Aqueduct Trail');
+
+    expect(screen.getByRole('complementary', { name: /route search results/i })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: /close search/i }));
+    expect(screen.getByRole('textbox', { name: /describe the route/i })).toHaveFocus();
+  });
+
+  it('exposes the floating search as a labelled search landmark', () => {
+    renderAt('/map');
+    expect(screen.getByRole('search', { name: /search routes/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /describe the route/i })).toBeInTheDocument();
+  });
+
+  it('marks the open route card with aria-current after clicking it', async () => {
+    mockedSearchRoutes.mockResolvedValue({
+      results: [searchResult('286', 'Aqueduct Trail')],
+      filtersRelaxed: false,
+    });
+
+    renderAt('/map');
+    submitSearch('aqueduct');
+    await screen.findByText('Aqueduct Trail');
+
+    fireEvent.click(screen.getByRole('button', { name: /focus aqueduct trail/i }));
+    expect(screen.getByRole('button', { name: /focus aqueduct trail/i })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+  });
 });

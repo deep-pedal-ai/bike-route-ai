@@ -234,3 +234,73 @@ Coverage ≥70% is gated at the joins (S3b / C7), where the plan places it.
 **Remaining follow-up**
 - Facility bbox is still static NY-wide rather than tied to `onMoveEnd`; defer as a
   real-app enhancement after this map-tab build.
+
+---
+
+## Map-tab NL search — Phases 0–7  ✅ gate: pass
+
+Branch: `feat/map-search-combination`. Client-only feature (no `shared`/`server` edits).
+Natural-language route search on the Map tab: floating top-center search bar → results
+panel slides in from the left → map filters to just those routes → hover dims the others
+→ click pans+zooms (`fitBounds`) and opens the detail panel → close restores everything.
+Plan of record: `docs/map-search-feature-plan.md`.
+
+**The landmine (plan §3), neutralized.** The corpus map layer stores `properties.id` as
+a **number** (`4`, `286`); `RouteSearchResult.id` is a **string**. Every id comparison
+normalizes both sides to string — feature side via `['to-string', ['get','id']]`, result
+side via `String(id)`. Unit tests assert a numeric feature id `4` matches a string
+membership id `'4'` both ways, in `buildIdFilter`, `routeOpacityExpression`, and
+`boundsForRouteId`. Confirmed fixture ids are numeric-looking, so the detail-open path's
+existing `Number(routeParam)` assumption still holds.
+
+**Done (by phase)**
+- **P0** — pure map-side utils: `buildIdFilter` (id-membership, string-normalized; `[]` ⇒
+  matches nothing), `boundsForRouteId` (union bounds or `null` for no-geometry),
+  `routeOpacityExpression` (uniform when nothing hovered; `case` expr otherwise,
+  parameterized full/dim so the casing layer can dim harder).
+- **P1** — extracted `useRouteSearch` from `GeneratePage`; both pages now share it.
+  GeneratePage behavior preserved (its existing test untouched and green).
+- **P2** — imperative camera: replaced the `<Map key=…>` remount with a `MapRef` +
+  `onLoad`; `focusBounds(bounds, opts)` → `fitBounds({padding:64, duration:600,
+  maxZoom:15})`; initial fit-to-all preserved (instant, `maxZoom:10` to match the old
+  `fitZoom` cap).
+- **P3** — `SearchResultsPanel` slide-in (`searchPanelIn` keyframe, reduced-motion safe);
+  reuses `RouteResultCard`; no-geometry results render read-only with a "no map preview"
+  hint.
+- **P4** — routes layer `line-opacity` driven by `routeOpacityExpression(hoveredId)`.
+- **P5** — keystone: `panelOpen`/`mapFiltered`/`hoveredId` three-flag state model (not a
+  single `searchActive`), `buildIdFilter` on **both** route layers (supersedes the
+  FilterBar — D3), camera follows results (union fit, skipped when zero mappable),
+  hover-dim, click-to-frame + open detail, close clears + restores.
+- **P6** — a11y (Esc-to-close, focus into panel on open / restore to search field on
+  close, `aria-current` on the open card, `role="search"` landmark + labelled textarea);
+  casing layer now dims with the line; `prefers-reduced-motion` drops the slide across all
+  panel keyframes; z-index ladder search(40) > detail(30) > results(20) > filter(10).
+
+**Layout fix found by live measurement (P6)**
+- The `rows=3` search bar renders **164px** tall; the first estimated reserved band
+  (`9.25rem`) overlapped it by ~28px. Measured `getBoundingClientRect` in a real browser
+  and corrected all three floating panels to `top-48` (12rem) → verified clean 16px gap,
+  no overlap.
+
+**Artifacts**
+- `docs/screenshots/map-search-closed.png` — search bar + FilterBar, no overlap.
+- `docs/screenshots/map-search-open.png` — panel open, "3 routes matched", relaxed notice,
+  mappable cards + a "no map preview" card, map framed to the results. (UI demo with
+  mocked `/api` data, not live corpus output.)
+
+**Verification**
+- `npm run ci` **green** (exit 0): lint + typecheck + tests across all packages —
+  client **149 tests**, server **44 tests** (incl. live Neon-test-branch integration).
+- Live browser walkthrough (Vite dev server, mocked `/api` endpoints): search → panel
+  slides in → FilterBar hidden → 2 mappable focus-cards + 1 "no map preview" → camera
+  framed the routes; close path restores the FilterBar and full filter.
+- Red-first discipline: the keystone hover test was confirmed non-vacuous (breaking the
+  `onHover` wire fails it).
+
+**Scope honored**
+- No edits to `@bike-route-ai/shared` or `packages/server`. Entire feature is client-only.
+
+**Note**
+- Phases 0–5 were captured in commit `0517355` (made outside this agent's actions); the
+  P6 polish remains in the working tree, uncommitted, per "commit only when asked."

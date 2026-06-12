@@ -8,10 +8,16 @@ import App from './App';
 
 type MapComponentProps = { children?: ReactNode };
 
-vi.mock('react-map-gl/maplibre', () => {
-  const Map = ({ children }: MapComponentProps): ReactNode => (
-    <div data-testid="maplibre-map">{children}</div>
+vi.mock('react-map-gl/maplibre', async () => {
+  const React = await import('react');
+  // forwardRef so MapExplorer's `ref={mapRef}` doesn't warn; this suite only
+  // checks routing, so the ref is accepted and ignored.
+  const Map = React.forwardRef(
+    ({ children }: MapComponentProps, _ref: React.ForwardedRef<unknown>): ReactNode => (
+      <div data-testid="maplibre-map">{children}</div>
+    ),
   );
+  Map.displayName = 'Map';
   const Source = ({ children }: MapComponentProps): ReactNode => children ?? null;
   const Layer = (): ReactNode => null;
   return { __esModule: true, default: Map, Map, Source, Layer };

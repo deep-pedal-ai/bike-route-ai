@@ -129,4 +129,17 @@ describe('SearchResultsPanel', () => {
     renderPanel({ results: [], mappableIds: new Set() });
     expect(screen.getByText(/no routes matched/i)).toBeInTheDocument();
   });
+
+  it('moves focus into the panel when it opens', () => {
+    renderPanel();
+    expect(screen.getByRole('complementary', { name: /route search results/i })).toHaveFocus();
+  });
+
+  it('marks the selected card with aria-current', () => {
+    renderPanel({ selectedId: '286' });
+    expect(screen.getByRole('button', { name: /focus old croton aqueduct/i })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+  });
 });

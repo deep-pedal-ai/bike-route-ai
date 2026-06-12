@@ -16,7 +16,12 @@ import { colorBySource, colorByQuality } from '../utils/route-color';
 import { facilityColor } from '../utils/facility-color';
 import { buildFilter, buildIdFilter } from '../utils/maplibre-filter';
 import { fitBoundsFromFeatures } from '../utils/bounds';
-import { boundsForRouteId, routeOpacityExpression } from '../utils/route-search-view';
+import {
+  boundsForRouteId,
+  routeOpacityExpression,
+  CASING_FULL_OPACITY,
+  CASING_DIM_OPACITY,
+} from '../utils/route-search-view';
 
 import type { MapRef } from 'react-map-gl/maplibre';
 import type { ExpressionSpecification } from 'maplibre-gl';
@@ -157,6 +162,8 @@ export default function MapExplorer() {
   // layer's line-opacity: hovered route bright, others dimmed (D4).
   const search = useRouteSearch();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // Wraps the floating SearchBar so focus can return to it when the panel closes.
+  const searchFieldRef = useRef<HTMLDivElement>(null);
 
   const {
     data: routesData,
@@ -287,16 +294,39 @@ export default function MapExplorer() {
   };
 
   // Close the panel → clear the search and the hover, restoring the FilterBar,
-  // every path, and the full filter (D8).
+  // every path, and the full filter (D8), and return focus to the search field.
   const handleCloseSearch = () => {
     search.clear();
     setHoveredId(null);
+    searchFieldRef.current?.querySelector('textarea')?.focus();
   };
+
+  // Esc closes the panel from anywhere. A "latest ref" keeps the listener stable
+  // so it subscribes once per open/close, not on every keystroke, while always
+  // calling the current close handler.
+  const closeSearchRef = useRef(handleCloseSearch);
+  useEffect(() => {
+    closeSearchRef.current = handleCloseSearch;
+  });
+  useEffect(() => {
+    if (!panelOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeSearchRef.current();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [panelOpen]);
 
   return (
     <main className="relative h-[calc(100vh-4rem)] w-full overflow-hidden bg-[var(--color-forest)]">
-      {/* Floating natural-language search — top-center, always reachable. */}
-      <div className="absolute left-1/2 top-3 z-30 w-[min(34rem,calc(100vw-1.5rem))] -translate-x-1/2">
+      {/* Floating natural-language search — top-center, always reachable
+          (z-40 keeps it above both side panels on every breakpoint). */}
+      <div
+        ref={searchFieldRef}
+        role="search"
+        aria-label="Search routes"
+        className="absolute left-1/2 top-3 z-40 w-[min(32rem,calc(100vw-1.5rem))] -translate-x-1/2"
+      >
         <SearchBar
           query={search.query}
           onQueryChange={search.setQuery}
@@ -309,6 +339,7 @@ export default function MapExplorer() {
         <SearchResultsPanel
           results={search.results}
           mappableIds={loadedRouteIds}
+          selectedId={routeParam}
           filtersRelaxed={search.filtersRelaxed}
           isLoading={search.isLoading}
           error={search.error}
@@ -320,7 +351,7 @@ export default function MapExplorer() {
 
       {/* FilterBar / Legend — hidden while the search panel is open (D1). */}
       {!panelOpen && (
-      <div className="map-panel absolute left-3 top-3 z-10 w-[min(27rem,calc(100vw-1.5rem))] rounded-lg border border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] p-3 shadow-[0_20px_55px_rgba(16,20,15,0.42)] backdrop-blur-md">
+      <div className="map-panel absolute left-3 top-48 z-10 w-[min(27rem,calc(100vw-1.5rem))] rounded-lg border border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] p-3 shadow-[0_20px_55px_rgba(16,20,15,0.42)] backdrop-blur-md">
         <FilterBar
           value={filterState}
           colorMode={colorMode}
@@ -389,7 +420,7 @@ export default function MapExplorer() {
       )}
 
       {routeDetail !== null && (
-        <div className="absolute inset-x-3 bottom-3 z-20 sm:inset-x-auto sm:bottom-auto sm:right-3 sm:top-3 sm:w-96 sm:max-w-[36vw]">
+        <div className="absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-auto sm:right-3 sm:top-48 sm:w-96 sm:max-w-[36vw]">
           <RouteDetailPanel route={routeDetail} onClose={clearSelection} />
         </div>
       )}
@@ -432,7 +463,11 @@ export default function MapExplorer() {
             type="line"
             paint={{
               'line-color': '#223020',
-              'line-opacity': 0.72,
+              'line-opacity': routeOpacityExpression(
+                hoveredId,
+                CASING_FULL_OPACITY,
+                CASING_DIM_OPACITY,
+              ),
               'line-width': 6,
             }}
             filter={layerFilter}

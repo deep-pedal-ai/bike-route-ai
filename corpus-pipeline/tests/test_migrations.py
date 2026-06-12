@@ -18,18 +18,21 @@ def _table_exists(conn, name: str) -> bool:
 
 def test_run_migrations_applies_001_and_records_it(clean_db):
     """A fresh DB: 001 is applied, the three tables exist, and schema_migrations
-    records 001_init.sql."""
+    records the schema migrations."""
     applied = migrations.run_migrations(clean_db)
     clean_db.commit()
 
-    assert applied == ["001_init.sql"]
+    assert applied == ["001_init.sql", "002_embeddings.sql"]
     assert _table_exists(clean_db, "routes")
     assert _table_exists(clean_db, "facility_segments")
     assert _table_exists(clean_db, "ingest_log")
 
     with clean_db.cursor() as cur:
         cur.execute("SELECT filename FROM schema_migrations ORDER BY filename")
-        assert [r[0] for r in cur.fetchall()] == ["001_init.sql"]
+        assert [r[0] for r in cur.fetchall()] == [
+            "001_init.sql",
+            "002_embeddings.sql",
+        ]
 
 
 def test_run_migrations_is_idempotent(clean_db):
@@ -39,9 +42,9 @@ def test_run_migrations_is_idempotent(clean_db):
     second = migrations.run_migrations(clean_db)
     clean_db.commit()
 
-    assert first == ["001_init.sql"]
+    assert first == ["001_init.sql", "002_embeddings.sql"]
     assert second == []  # no pending migrations
 
     with clean_db.cursor() as cur:
         cur.execute("SELECT count(*) FROM schema_migrations")
-        assert cur.fetchone()[0] == 1  # not duplicated
+        assert cur.fetchone()[0] == 2  # not duplicated

@@ -201,7 +201,7 @@ def source_prior(source: str, settings: Settings | None = None) -> float:
     canon / osm_relation → 1.0; nysdot / usbrs → 0.9; generated → 0.5; any
     unrecognized source → the configured default (0.5).
     """
-    s = settings or Settings()
+    s = _pure_default_settings(settings)
     return {
         "canon": s.source_prior_canon,
         "osm_relation": s.source_prior_osm_relation,
@@ -222,7 +222,7 @@ def surface_quality(
     ``osm_relation`` rows never carry one — uses the documented neutral default
     (``settings.surface_quality_default``, 0.5). v1 tunable heuristic.
     """
-    s = settings or Settings()
+    s = _pure_default_settings(settings)
     default = s.surface_quality_default
     if not surface_breakdown:
         return default
@@ -247,12 +247,21 @@ def quality_score(
 
     ``0.4*protected + 0.2*greenway + 0.2*surface_quality + 0.2*source_prior``.
     """
-    s = settings or Settings()
+    s = _pure_default_settings(settings)
     return (
         s.weight_protected * protected_lane_fraction
         + s.weight_greenway * greenway_fraction
         + s.weight_surface * surface_quality
         + s.weight_source_prior * source_prior(source, s)
+    )
+
+
+def _pure_default_settings(settings: Settings | None) -> Settings:
+    """Return settings for pure scoring helpers without requiring environment."""
+    return settings or Settings(
+        database_url="postgresql://unused",
+        ors_api_key="unused",
+        _env_file=None,
     )
 
 

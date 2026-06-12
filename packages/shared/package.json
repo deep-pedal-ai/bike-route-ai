@@ -2,6 +2,9 @@
   "name": "@bike-route-ai/shared",
   "version": "0.1.0",
   "type": "module",
+  "scripts": {
+    "build": "tsc"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",

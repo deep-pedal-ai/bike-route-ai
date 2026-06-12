@@ -13,3 +13,28 @@ export interface RouteRequest {
 export interface RouteResponse {
   routes: Route[];
 }
+
+export type RouteSearchRequest = {
+  query: string;
+};
+
+export type RouteSearchResult = {
+  id: string;
+  name: string;
+  distanceKm: number;
+  ascentM: number | null;
+  isLoop: boolean;
+  qualityScore: number | null;
+  surfaceBreakdown: Record<string, number> | null;
+  blurb: string;
+};
+
+export type RouteSearchResponse = {
+  results: RouteSearchResult[];
+  filtersRelaxed: boolean;
+};
+
+export type ErrorResponse = {
+  error: string;
+  statusCode: number;
+};

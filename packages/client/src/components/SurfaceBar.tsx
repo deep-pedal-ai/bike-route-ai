@@ -7,20 +7,32 @@ interface SurfaceBarProps {
 const SURFACE_COLORS: Record<string, string> = {
   Gravel: 'bg-amber-500',
   Road: 'bg-blue-500',
+  Paved: 'bg-lime-400',
   'Paved Path': 'bg-lime-400',
   Path: 'bg-lime-400',
+  Asphalt: 'bg-lime-400',
+  Concrete: 'bg-cyan-400',
+  Unpaved: 'bg-orange-500',
   Singletrack: 'bg-orange-500',
 };
 
 const SURFACE_DOT_COLORS: Record<string, string> = {
   Gravel: 'bg-amber-500',
   Road: 'bg-blue-500',
+  Paved: 'bg-lime-400',
   'Paved Path': 'bg-lime-400',
   Path: 'bg-lime-400',
+  Asphalt: 'bg-lime-400',
+  Concrete: 'bg-cyan-400',
+  Unpaved: 'bg-orange-500',
   Singletrack: 'bg-orange-500',
 };
 
 export default function SurfaceBar({ surfaces }: SurfaceBarProps) {
+  if (surfaces.length === 0) {
+    return <p className="text-sm text-zinc-500">Surface data unavailable</p>;
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-zinc-800">
@@ -28,7 +40,7 @@ export default function SurfaceBar({ surfaces }: SurfaceBarProps) {
           <div
             key={s.label}
             className={`${SURFACE_COLORS[s.label] ?? 'bg-zinc-500'} transition-all duration-500`}
-            style={{ width: `${s.percentage}%` }}
+            style={{ width: `${Math.max(0, Math.min(100, s.percentage))}%` }}
           />
         ))}
       </div>

@@ -1,12 +1,7 @@
-# ════════════════════════════════════════════════════════════════════════
-# NOTHING in this document is implemented. It is a warm-start design only.
-# ════════════════════════════════════════════════════════════════════════
-
-There is **no `phase5` CLI command**, **no `vector` extension**, and **no
-`description` / `embedding` / `embedding_model` columns** in the database
-(ADR-0004). This file is the design a later agent session picks up to add
-semantic search / RAG on top of the finished corpus. Read it as a spec to build,
-not a record of what exists.
+Phase 5 implements this design with the OpenAI `text-embedding-3-small`
+embedder, migration `002_embeddings.sql`, and the `phase5` CLI command. This
+document remains the contract for the description template, model guard, exact
+scan, and ranking acceptance gate.
 
 ---
 
@@ -99,14 +94,14 @@ Two concrete embedders are planned:
 
 ---
 
-## 3. The future `ALTER TABLE` (the migration Phase 5 adds)
+## 3. The `ALTER TABLE` migration Phase 5 adds
 
 This is migration `002` (or later), run **only** once the embedder + dimension
 are chosen. `<dim>` is substituted with the chosen embedder's dimension (1536 or
 384). It is additive — it does not touch any Phase 1–4 column.
 
 ```sql
--- Phase 5 migration (NOT YET WRITTEN). <dim> = the chosen embedder dimension.
+-- Phase 5 migration. <dim> = the chosen embedder dimension.
 CREATE EXTENSION IF NOT EXISTS vector;
 
 ALTER TABLE routes

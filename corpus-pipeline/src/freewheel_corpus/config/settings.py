@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     # --- Required ---------------------------------------------------------
     database_url: str
     ors_api_key: str
+    openai_api_key: str | None = None
 
     # --- Per-service base URLs (default = public endpoint; override to self-host)
     overpass_base_url: str = "https://overpass-api.de/api/interpreter"

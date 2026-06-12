@@ -38,3 +38,6 @@ export type ErrorResponse = {
   error: string;
   statusCode: number;
 };
+
+// Corpus map-tab contract (new — does not modify the AI-gen types above).
+export * from './corpus.js';

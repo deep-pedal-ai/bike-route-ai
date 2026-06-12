@@ -10,5 +10,8 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     }
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16"
   }
 }

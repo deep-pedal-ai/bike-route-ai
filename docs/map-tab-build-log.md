@@ -58,3 +58,46 @@ Branch: `feat/map-tab`.
 - `git diff` scope: only `packages/**`, `docs/`, `.github/ci.yml`, lockfile. No `.env`.
 
 **Contract is now FROZEN.** Any later change requires an orchestrator re-freeze.
+
+---
+
+## Fan-out — Track S {S1,S2,S3a} ∥ Track C {C1–C6}  ✅ gate: pass
+
+Dispatched as one Workflow (9 subagents, shared tree, each running only its own
+test file, returning the §7 report as structured data). No contract pressure from
+any agent — the frozen contract held.
+
+**Outcomes**
+- S1 corpus-client: pass — `db.ts` lazy pg.Pool + 4 SQL-built queries; 6 integration
+  tests vs the Neon test branch. Note: `db.ts` reads `DATABASE_URL`; the integration
+  test redirects `DATABASE_URL=TEST_DATABASE_URL` internally so runtime stays on main.
+- S2 corpus-service + geojson: the original agent finished all 4 files (22 tests) then
+  **died on a transient API socket error while emitting its report** (returned null). A
+  re-dispatched agent verified the on-disk files were complete + spec-conform and made
+  zero edits. pass.
+- S3a error-handler: pass — HttpError + central handler; 2 tests.
+- C1 router shell: pass — App→layout + GeneratePage (Generate flow unchanged) + Header
+  nav; existing App/Header tests router-wrapped. C2 hooks, C3 utils, C4 panel,
+  C5 FilterBar, C6 Legend: all pass.
+
+**Orchestrator gate verification (independent of the reports)**
+- Two real issues the agents' type-free vitest runs could not see, fixed before commit:
+  1. C2 `use-corpus-route.ts` tripped `react-hooks/set-state-in-effect` (sync setState in
+     the effect body) → fix subagent moved it into the async `run` fn; tests stay green.
+  2. S3a `error-handler.ts` `_next` flagged unused (mandatory 4-arg Express signature) →
+     added `argsIgnorePattern:'^_'` to `eslint.config.mjs` (orchestrator-owned config;
+     the codebase already used the `_`-prefix convention). Also removed a dead
+     `eslint-disable no-console` directive in S1's test (a non-blocking warning).
+  These two janitorial fixes (config + dead comment) were applied directly; the
+  behavioral C2 fix went through a subagent.
+- Whole-repo: `npm run lint` exit 0, `npm run typecheck` exit 0.
+- Suites: client 22 files / 127 tests; server 5 files / 32 tests (incl. 6 live Neon
+  integration). No `any` in source; no `express` import in `services/`; every WP stayed
+  within its file scope (no config/contract/cross-WP edits).
+- Gotcha logged: `dotenv/config` loads `.env` relative to CWD, so server tests must run
+  with cwd=packages/server (`npm test -w packages/server`); running `vitest --root` from
+  the repo root silently skips the integration tests. CI is fine (npm sets workspace cwd;
+  the GH `TEST_DATABASE_URL` secret supplies the env var when no `.env` file exists).
+
+**Commits:** `s1`, `s2`, `s3a`, `c1`, `c2`, `c3`, `c4`, `c5`, `c6` (one per WP).
+Coverage ≥70% is gated at the joins (S3b / C7), where the plan places it.

@@ -1,5 +1,24 @@
 @import "tailwindcss";
 
+:root {
+  --color-forest: oklch(22% 0.035 145);
+  --color-forest-panel: oklch(24% 0.03 135 / 0.94);
+  --color-bark: oklch(18% 0.025 120);
+  --color-bark-soft: oklch(20% 0.025 120 / 0.72);
+  --color-bark-border: oklch(39% 0.035 120 / 0.58);
+  --color-leaf: oklch(70% 0.115 125);
+  --color-leaf-hover: oklch(76% 0.105 125);
+  --color-leaf-border: oklch(70% 0.115 125 / 0.34);
+  --color-leaf-wash: oklch(70% 0.115 125 / 0.12);
+  --color-river: oklch(68% 0.08 220);
+  --color-sky-wash: oklch(68% 0.08 220 / 0.14);
+  --color-clay: oklch(65% 0.1 45);
+  --color-trail: oklch(72% 0.09 82);
+  --color-cream: oklch(92% 0.018 95);
+  --color-sage-text: oklch(78% 0.035 125);
+  --color-moss-muted: oklch(61% 0.025 125);
+}
+
 @keyframes fadeSlideUp {
   from {
     opacity: 0;
@@ -13,4 +32,47 @@
 
 .animate-fade-slide-up {
   animation: fadeSlideUp 0.45s ease-out forwards;
+}
+
+@keyframes mapPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes detailPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 640px) {
+  @keyframes detailPanelIn {
+    from {
+      opacity: 0;
+      transform: translateX(24px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+}
+
+.map-panel {
+  animation: mapPanelIn 0.35s ease-out both;
+}
+
+.detail-panel-motion {
+  animation: detailPanelIn 0.32s ease-out both;
 }

@@ -1,16 +1,16 @@
 import { Zap, Loader2 } from 'lucide-react';
 
-interface SearchBarProps {
+type SearchBarProps = {
   query: string;
   onQueryChange: (value: string) => void;
   onGenerate: () => void;
   isLoading: boolean;
-}
+};
 
 export default function SearchBar({ query, onQueryChange, onGenerate, isLoading }: SearchBarProps) {
   return (
     <div className="relative w-full">
-      <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/80 p-1 shadow-2xl shadow-black/40 transition-all duration-200 focus-within:border-lime-400/50 focus-within:shadow-lime-400/5">
+      <div className="rounded-2xl border border-[var(--color-bark-border)] bg-[var(--color-bark-soft)] p-1 shadow-2xl shadow-black/30 transition-all duration-200 focus-within:border-[var(--color-leaf-border)] focus-within:shadow-[0_18px_42px_rgba(24,33,22,0.45)]">
         <textarea
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
@@ -28,7 +28,7 @@ export default function SearchBar({ query, onQueryChange, onGenerate, isLoading 
           <button
             onClick={onGenerate}
             disabled={isLoading || query.trim().length === 0}
-            className="flex items-center gap-2 rounded-xl bg-lime-400 px-5 py-2.5 text-sm font-semibold text-zinc-950 transition-all duration-200 hover:bg-lime-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-[var(--color-leaf)] px-5 py-2.5 text-sm font-semibold text-[var(--color-forest)] transition-all duration-200 hover:bg-[var(--color-leaf-hover)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />

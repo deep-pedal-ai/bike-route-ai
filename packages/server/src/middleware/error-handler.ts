@@ -1,38 +1,24 @@
-import type { ErrorRequestHandler } from 'express';
+import type { Request, Response, NextFunction } from 'express';
+import { HttpError } from './http-error.js';
 
-type HttpLikeError = Error & {
-  statusCode?: number;
-  status?: number;
-};
+// Re-export so existing importers (corpus-controller, error-handler.test) keep
+// resolving HttpError from here. http-error.ts is the single source of truth,
+// shared with the route-search controller, so `instanceof HttpError` holds for
+// errors thrown by either feature.
+export { HttpError };
 
-export const errorHandler: ErrorRequestHandler = (err: unknown, _req, res, next) => {
-  void next;
-  const normalized = normalizeError(err);
-  res.status(normalized.statusCode).json({
-    error: normalized.message,
-    statusCode: normalized.statusCode,
-  });
-};
-
-function normalizeError(err: unknown): { message: string; statusCode: number } {
-  if (err instanceof Error) {
-    const httpError = err as HttpLikeError;
-    const statusCode = normalizeStatusCode(httpError.statusCode ?? httpError.status);
-    return {
-      message: err.message || 'Internal server error',
-      statusCode,
-    };
+// Central Express error middleware (4-arg signature). HttpErrors expose their
+// statusCode + message; anything else is treated as an unexpected 500 with a
+// generic message so internal (e.g. DB) error text never leaks to the client.
+export function errorHandler(
+  err: unknown,
+  _req: Request,
+  res: Response,
+  _next: NextFunction,
+): void {
+  if (err instanceof HttpError) {
+    res.status(err.statusCode).json({ error: err.message, statusCode: err.statusCode });
+    return;
   }
-
-  return {
-    message: 'Internal server error',
-    statusCode: 500,
-  };
-}
-
-function normalizeStatusCode(statusCode: number | undefined): number {
-  if (statusCode && Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599) {
-    return statusCode;
-  }
-  return 500;
+  res.status(500).json({ error: 'Internal Server Error', statusCode: 500 });
 }

@@ -1,31 +1,31 @@
 import type { Surface } from '../types/route';
 
-interface SurfaceBarProps {
+type SurfaceBarProps = {
   surfaces: Surface[];
-}
+};
 
 const SURFACE_COLORS: Record<string, string> = {
-  Gravel: 'bg-amber-500',
-  Road: 'bg-blue-500',
-  Paved: 'bg-lime-400',
-  'Paved Path': 'bg-lime-400',
-  Path: 'bg-lime-400',
-  Asphalt: 'bg-lime-400',
-  Concrete: 'bg-cyan-400',
-  Unpaved: 'bg-orange-500',
-  Singletrack: 'bg-orange-500',
+  Gravel: 'bg-[var(--color-trail)]',
+  Road: 'bg-[var(--color-river)]',
+  Paved: 'bg-[var(--color-leaf)]',
+  'Paved Path': 'bg-[var(--color-leaf)]',
+  Path: 'bg-[var(--color-leaf)]',
+  Asphalt: 'bg-[var(--color-leaf)]',
+  Concrete: 'bg-[var(--color-river)]',
+  Unpaved: 'bg-[var(--color-clay)]',
+  Singletrack: 'bg-[var(--color-clay)]',
 };
 
 const SURFACE_DOT_COLORS: Record<string, string> = {
-  Gravel: 'bg-amber-500',
-  Road: 'bg-blue-500',
-  Paved: 'bg-lime-400',
-  'Paved Path': 'bg-lime-400',
-  Path: 'bg-lime-400',
-  Asphalt: 'bg-lime-400',
-  Concrete: 'bg-cyan-400',
-  Unpaved: 'bg-orange-500',
-  Singletrack: 'bg-orange-500',
+  Gravel: 'bg-[var(--color-trail)]',
+  Road: 'bg-[var(--color-river)]',
+  Paved: 'bg-[var(--color-leaf)]',
+  'Paved Path': 'bg-[var(--color-leaf)]',
+  Path: 'bg-[var(--color-leaf)]',
+  Asphalt: 'bg-[var(--color-leaf)]',
+  Concrete: 'bg-[var(--color-river)]',
+  Unpaved: 'bg-[var(--color-clay)]',
+  Singletrack: 'bg-[var(--color-clay)]',
 };
 
 export default function SurfaceBar({ surfaces }: SurfaceBarProps) {

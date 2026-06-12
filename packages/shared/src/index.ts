@@ -13,3 +13,6 @@ export interface RouteRequest {
 export interface RouteResponse {
   routes: Route[];
 }
+
+// Corpus map-tab contract (new — does not modify the AI-gen types above).
+export * from './corpus.js';

@@ -33,6 +33,12 @@ jobs:
 
       - name: Test with coverage
         run: npm run coverage --workspaces --if-present
+        env:
+          # Add this secret in GitHub repo settings to run server integration
+          # tests against the Neon test branch. If unset, those tests skip and
+          # packages/server coverage can dip below the 70% threshold.
+          # Use a read-only Neon child branch off main (tests only SELECT).
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
 
       - name: Coverage report — client
         uses: davelosert/vitest-coverage-report-action@v2

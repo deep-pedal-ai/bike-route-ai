@@ -32,9 +32,9 @@ describe('SearchBar', () => {
     expect(screen.getByRole('button')).toBeDisabled();
   });
 
-  it('shows "Generating…" text when loading', () => {
+  it('shows "Searching…" text when loading', () => {
     render(<SearchBar query="gravel" onQueryChange={vi.fn()} onGenerate={vi.fn()} isLoading={true} />);
-    expect(screen.getByText('Generating…')).toBeInTheDocument();
+    expect(screen.getByText('Searching…')).toBeInTheDocument();
   });
 
   it('shows char count when query is non-empty', () => {

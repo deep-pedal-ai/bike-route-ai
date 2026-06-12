@@ -39,4 +39,9 @@ describe('SurfaceBar', () => {
     render(<SurfaceBar surfaces={[{ label: 'Cobblestone', percentage: 100 }]} />);
     expect(screen.getByText('Cobblestone')).toBeInTheDocument();
   });
+
+  it('renders unavailable state for empty surfaces', () => {
+    render(<SurfaceBar surfaces={[]} />);
+    expect(screen.getByText('Surface data unavailable')).toBeInTheDocument();
+  });
 });

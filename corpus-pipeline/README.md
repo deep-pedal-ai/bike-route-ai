@@ -36,6 +36,7 @@ The CLI entry point is `uv run freewheel-corpus <command>`.
 |-----|----------|---------|
 | `DATABASE_URL` | **yes** | The corpus DB (`postgresql://…?sslmode=require`). Sole integration seam with the serving app. |
 | `ORS_API_KEY` | **yes** for Phase 4 | openrouteservice key (canon routing + loop generation). Unit tests use fixtures and need no key. |
+| `OPENAI_API_KEY` | **yes** for Phase 5 | OpenAI key for `text-embedding-3-small` route description embeddings. |
 | `TEST_DATABASE_URL` | no | Isolated test branch for DB-backed tests + the Phase-1 integration test. Tests skip cleanly when unset; **never** `DATABASE_URL`. |
 | `OVERPASS_BASE_URL`, `VALHALLA_BASE_URL`, `ORS_BASE_URL`, `SOCRATA_BASE_URL`, `ARCGIS_BASE_URL` | no | Per-service base URLs, each defaulting to the public endpoint (override to self-host later). |
 
@@ -56,6 +57,7 @@ uv run freewheel-corpus phase2     # NYSDOT + manual GPX, map-matched (ArcGIS + 
 uv run freewheel-corpus phase3     # NYC DOT facilities + quality scoring (Socrata)
 uv run freewheel-corpus phase4     # canon seeding + scored loop generation (ORS)
 uv run freewheel-corpus phase3     # FINAL pass: score canon/generated + cross-source dedup
+uv run freewheel-corpus phase5     # descriptions + embeddings for semantic search
 uv run freewheel-corpus stats      # counts by source, score distribution, rejected/unmatched
 ```
 
@@ -142,10 +144,9 @@ and every generated loop — is licensed under the **Open Database License (ODbL
   requirements, the `DATABASE_URL` contract + DDL rights, data volume, a
   reference-only PostGIS compose snippet, and the self-hosted routing-graph
   extent note. *(Not implemented here — the pipeline owns no infra.)*
-- [`docs/embeddings-plan.md`](docs/embeddings-plan.md) — Phase-5 warm-start:
-  description template, the `Embedder` protocol, the future `ALTER TABLE` adding
-  pgvector + embedding columns, and the ranking acceptance test. *(Nothing in it
-  is implemented; there is no `phase5` command and no embedding columns — ADR-0004.)*
+- [`docs/embeddings-plan.md`](docs/embeddings-plan.md) — Phase-5 design:
+  description template, the `Embedder` protocol, pgvector columns, and the
+  env-gated ranking acceptance test.
 - [`docs/PLAN.md`](docs/PLAN.md) / [`docs/DECISIONS.md`](docs/DECISIONS.md) /
   [`docs/adr/`](docs/adr/) — the build plan, locked decisions, and ADRs.
 - [`docs/RECOVERY.md`](docs/RECOVERY.md) — incident/handoff record (a local file

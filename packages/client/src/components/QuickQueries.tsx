@@ -9,18 +9,18 @@ interface QuickQuery {
 
 const QUICK_QUERIES: QuickQuery[] = [
   {
-    label: 'Gravel + Coffee',
-    query: 'Find me a gravel loop with a coffee stop and some technical fire road sections',
+    label: 'Hilly Gravel',
+    query: 'Hilly gravel loop away from traffic around 35 km',
     icon: <Mountain className="h-3.5 w-3.5" />,
   },
   {
-    label: 'Coastal Road Ride',
-    query: 'Coastal road ride with big climbs, ocean views, endurance focused',
+    label: 'Long Road Loop',
+    query: 'Long paved road loop with steady climbing',
     icon: <Waves className="h-3.5 w-3.5" />,
   },
   {
-    label: 'Easy Path Cruise',
-    query: 'Easy casual flat path ride, recovery spin, nothing too hard',
+    label: 'Flat Greenway',
+    query: 'Flat mostly paved greenway ride away from traffic around 20 km',
     icon: <Leaf className="h-3.5 w-3.5" />,
   },
 ];
@@ -33,7 +33,7 @@ interface QuickQueriesProps {
 export default function QuickQueries({ onSelect, disabled }: QuickQueriesProps) {
   return (
     <div className="flex flex-wrap justify-center gap-2">
-      <span className="mb-1 w-full text-center text-xs text-zinc-600">Try a quick query →</span>
+      <span className="mb-1 w-full text-center text-xs text-zinc-600">Common rides</span>
       {QUICK_QUERIES.map((q) => (
         <button
           key={q.label}

@@ -1,8 +1,6 @@
 """Freewheel corpus pipeline CLI (Typer).
 
-Commands: ``migrate | phase1 | phase2 | phase3 | phase4 | stats``. There is
-deliberately NO ``phase5`` (ADR-0004 — descriptions/embeddings are a documented
-future migration).
+Commands: ``migrate | phase1 | phase2 | phase3 | phase4 | phase5 | stats``.
 
 ``migrate`` applies pending migrations and records them in ``schema_migrations``.
 ``stats`` reports the corpus shape.
@@ -14,6 +12,7 @@ import typer
 
 from freewheel_corpus import db, migrations, stats as stats_module
 from freewheel_corpus.config.settings import Settings
+from freewheel_corpus.embedder import OpenAIEmbedder
 
 app = typer.Typer(
     help="Freewheel bike-route corpus pipeline.",
@@ -242,6 +241,28 @@ def phase4(
             "replay for free, so the next run continues where this one stopped."
         )
         raise typer.Exit(code=0)
+
+
+@app.command()
+def phase5() -> None:
+    """Phase 5 — descriptions + OpenAI embeddings for semantic route search."""
+    from freewheel_corpus.phases import p5_embeddings as p5
+
+    settings = _settings()
+    embedder = OpenAIEmbedder(api_key=settings.openai_api_key)
+
+    with db.connect(settings.database_url) as conn:
+        stats = p5.run(conn, embedder=embedder)
+
+    typer.echo("Phase 5 — route descriptions + embeddings")
+    if stats.migrations_applied:
+        typer.echo(f"  migrations applied:  {', '.join(stats.migrations_applied)}")
+    else:
+        typer.echo("  migrations applied:  none")
+    typer.echo(f"  model:               {stats.model_id}")
+    typer.echo(f"  routes scanned:      {stats.scanned}")
+    typer.echo(f"  embedded/updated:    {stats.embedded}")
+    typer.echo(f"  already current:     {stats.skipped_current}")
 
 
 if __name__ == "__main__":

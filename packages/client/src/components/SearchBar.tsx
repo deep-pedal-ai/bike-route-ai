@@ -23,7 +23,7 @@ export default function SearchBar({ query, onQueryChange, onGenerate, isLoading 
         />
         <div className="flex items-center justify-between px-4 pb-3">
           <span className="text-xs text-zinc-600">
-            {query.length > 0 ? `${query.length} chars` : '⌘ + Enter to generate'}
+            {query.length > 0 ? `${query.length} chars` : ''}
           </span>
           <button
             onClick={onGenerate}
@@ -35,7 +35,7 @@ export default function SearchBar({ query, onQueryChange, onGenerate, isLoading 
             ) : (
               <Zap className="h-4 w-4" strokeWidth={2.5} />
             )}
-            {isLoading ? 'Generating…' : 'Generate Route'}
+            {isLoading ? 'Searching…' : 'Search Routes'}
           </button>
         </div>
       </div>

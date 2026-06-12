@@ -7,6 +7,23 @@ type RouteDetailPanelProps = {
   onClose: () => void;
 };
 
+function formatNumber(value: number | null, digits = 1): string {
+  if (value === null) {
+    return '—';
+  }
+  return value.toLocaleString(undefined, {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
+  });
+}
+
+function formatFraction(value: number | null): string {
+  if (value === null) {
+    return '—';
+  }
+  return Math.round(value * 100) + '%';
+}
+
 export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelProps) {
   if (route === null) {
     return null;
@@ -15,14 +32,16 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
   const p = route.properties;
 
   return (
-    <aside className="space-y-4 rounded-lg border border-zinc-700/60 bg-zinc-900 p-4 text-zinc-200">
+    <aside className="detail-panel-motion max-h-[70vh] space-y-4 overflow-auto rounded-lg border border-lime-300/20 bg-zinc-950/95 p-4 text-zinc-200 shadow-[0_0_40px_rgba(0,0,0,0.55)] backdrop-blur-md">
       <header className="flex items-start justify-between gap-3">
-        <h2 className="text-lg font-semibold">{p.name ?? 'Unnamed route'}</h2>
+        <h2 className="text-balance text-lg font-semibold leading-tight text-zinc-50">
+          {p.name ?? 'Unnamed route'}
+        </h2>
         <button
           type="button"
           aria-label="Close route detail"
           onClick={onClose}
-          className="rounded px-2 py-1 text-zinc-400 hover:text-zinc-100"
+          className="h-8 w-8 rounded border border-zinc-800 text-zinc-500 transition hover:border-lime-300 hover:text-lime-200"
         >
           ×
         </button>
@@ -30,7 +49,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
 
       <span
         title={CORPUS_FIELD_DOCS.source}
-        className="inline-block rounded-full bg-zinc-800 px-2 py-0.5 text-xs font-semibold text-lime-400"
+        className="inline-block rounded-full border border-lime-300/30 bg-lime-300/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase text-lime-300"
       >
         {p.source}
       </span>
@@ -40,37 +59,39 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
           <dt title={CORPUS_FIELD_DOCS.distance_km} className="text-xs text-zinc-400">
             Distance (km)
           </dt>
-          <dd>{p.distance_km ?? '—'}</dd>
+          <dd className="font-mono text-zinc-50">{formatNumber(p.distance_km, 1)}</dd>
         </div>
         <div>
           <dt title={CORPUS_FIELD_DOCS.is_loop} className="text-xs text-zinc-400">
             Loop
           </dt>
-          <dd>{p.is_loop === null ? '—' : p.is_loop ? 'Yes' : 'No'}</dd>
+          <dd className="font-mono text-zinc-50">
+            {p.is_loop === null ? '—' : p.is_loop ? 'YES' : 'NO'}
+          </dd>
         </div>
         <div>
           <dt title={CORPUS_FIELD_DOCS.ascent_m} className="text-xs text-zinc-400">
             Ascent (m)
           </dt>
-          <dd>{p.ascent_m ?? '—'}</dd>
+          <dd className="font-mono text-zinc-50">{formatNumber(p.ascent_m, 0)}</dd>
         </div>
         <div>
           <dt title={CORPUS_FIELD_DOCS.descent_m} className="text-xs text-zinc-400">
             Descent (m)
           </dt>
-          <dd>{p.descent_m ?? '—'}</dd>
+          <dd className="font-mono text-zinc-50">{formatNumber(p.descent_m, 0)}</dd>
         </div>
         <div>
           <dt title={CORPUS_FIELD_DOCS.quality_score} className="text-xs text-zinc-400">
             Quality score
           </dt>
-          <dd>{p.quality_score ?? '—'}</dd>
+          <dd className="font-mono text-zinc-50">{formatNumber(p.quality_score, 2)}</dd>
         </div>
         <div>
           <dt title={CORPUS_FIELD_DOCS.match_quality} className="text-xs text-zinc-400">
             Match quality
           </dt>
-          <dd>{p.match_quality ?? '—'}</dd>
+          <dd className="font-mono text-zinc-50">{formatNumber(p.match_quality, 2)}</dd>
         </div>
         <div>
           <dt
@@ -79,7 +100,9 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
           >
             Protected lane
           </dt>
-          <dd>{p.protected_lane_fraction ?? '—'}</dd>
+          <dd className="font-mono text-zinc-50">
+            {formatFraction(p.protected_lane_fraction)}
+          </dd>
         </div>
         <div>
           <dt
@@ -88,7 +111,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
           >
             Greenway
           </dt>
-          <dd>{p.greenway_fraction ?? '—'}</dd>
+          <dd className="font-mono text-zinc-50">{formatFraction(p.greenway_fraction)}</dd>
         </div>
         <div>
           <dt
@@ -97,7 +120,9 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
           >
             Facility coverage
           </dt>
-          <dd>{p.facility_coverage_fraction ?? '—'}</dd>
+          <dd className="font-mono text-zinc-50">
+            {formatFraction(p.facility_coverage_fraction)}
+          </dd>
         </div>
       </dl>
 
@@ -106,12 +131,15 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
           Surface
         </h3>
         <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-zinc-800">
-          {Object.entries(p.surface_breakdown ?? {}).map(([surface, fraction]) => (
+          {Object.entries(p.surface_breakdown ?? {}).map(([surface, fraction], index) => (
             <div
               key={surface}
               data-testid="surface-segment"
               title={`${surface} ${Math.round(fraction * 100)}%`}
-              className="h-full bg-lime-400/80"
+              className={[
+                'h-full',
+                index % 2 === 0 ? 'bg-lime-300/90' : 'bg-sky-300/80',
+              ].join(' ')}
               style={{ width: `${fraction * 100}%` }}
             />
           ))}

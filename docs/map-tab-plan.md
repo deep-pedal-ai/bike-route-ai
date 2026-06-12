@@ -459,7 +459,7 @@ footgun explicitly checked.
 
 ---
 
-### [ ] PHASE 4 — frontend-design polish (Tier 2)  *(serial-ish: P1 → P2 → P3)*
+### [x] PHASE 4 — frontend-design polish (Tier 2)  *(serial-ish: P1 → P2 → P3)*
 
 Driven by the `frontend-design` skill; functional correctness (Phase 3) must hold throughout.
 - **P4.1 — Type + palette + atmosphere:** a distinctive font pairing (display + a **monospace for numeric data fields** to give an "instrument" feel — avoid Inter/Roboto/Space-Grotesk defaults); refine dark/lime; panel/legend treatments; subtle grain/vignette; tune the basemap to sit behind glowing routes.
@@ -496,4 +496,4 @@ One commit per green gate, on `feat/map-tab`: `p0: contract + fixture`, `s1: cor
 - [x] S1 — corpus-client (DB) · [x] S2 — corpus-service + geojson · [x] S3a — error-handler · [x] S3b — controller/routes JOIN
 - [x] C1 — router shell · [x] C2 — data hooks · [x] C3 — encoding utils · [x] C4 — RouteDetailPanel · [x] C5 — FilterBar · [x] C6 — Legend · [x] C7 — MapExplorer JOIN
 - [x] Phase 3 — E2E verification
-- [ ] Phase 4 — frontend-design polish
+- [x] Phase 4 — frontend-design polish

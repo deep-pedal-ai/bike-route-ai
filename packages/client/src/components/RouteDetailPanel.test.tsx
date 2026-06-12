@@ -15,7 +15,7 @@ describe('RouteDetailPanel', () => {
   it('renders the route name, distance, and source', () => {
     render(<RouteDetailPanel route={route} onClose={vi.fn()} />);
     expect(screen.getByText('Prospect Park Loop (double)')).toBeInTheDocument();
-    expect(screen.getByText('8.8628')).toBeInTheDocument();
+    expect(screen.getByText('8.9')).toBeInTheDocument();
     expect(screen.getByText('canon')).toBeInTheDocument();
   });
 

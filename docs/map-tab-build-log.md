@@ -200,3 +200,37 @@ Coverage ≥70% is gated at the joins (S3b / C7), where the plan places it.
 **Remaining follow-up**
 - Facility bbox is still static NY-wide rather than wired to live map viewport movement;
   carry into Phase 4 polish/enhancement.
+
+---
+
+## Phase 4 — frontend-design polish  ✅ gate: pass
+
+**Done**
+- Applied a restrained instrument-panel visual direction for the map controls and route
+  detail panel: compact dark glass, lime accents, font-mono numeric readouts, formatted
+  telemetry values, and sharper focus/hover states.
+- Added route glow styling with a separate `routes-glow` MapLibre layer behind the main
+  route line layer.
+- Added loading, empty, and error status chips for routes, selected route detail, and
+  facilities.
+- Improved panel motion and responsive behavior: control panel entrance animation and
+  route detail panel slide-in/bottom-sheet behavior on smaller screens.
+- Preserved required Carto + OpenStreetMap/ODbL attribution in the UI.
+- Kept accessible names for compact source and numeric controls.
+
+**Artifact**
+- Final polish screenshot: `docs/map-tab-phase4-polish.png`
+
+**Verification**
+- Browser check on `http://localhost:8080/map?route=144`: canvas mounted, detail panel
+  visible, formatted route fields present, required attribution visible.
+- `npm test -w packages/client`: 23 files / 133 tests passed.
+- `npm exec -- tsc --noEmit -p packages/client/tsconfig.json` clean.
+- `npm exec -- eslint packages/client` clean.
+- `npm run ci` green: lint, typecheck, client tests (133), server tests (36 with live
+  Neon test branch).
+- `npm run coverage -w packages/client` passed the configured ≥70% threshold.
+
+**Remaining follow-up**
+- Facility bbox is still static NY-wide rather than tied to `onMoveEnd`; defer as a
+  real-app enhancement after this map-tab build.

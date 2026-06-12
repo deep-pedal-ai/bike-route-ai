@@ -146,17 +146,29 @@ export default function MapExplorer() {
   const [colorMode, setColorMode] = useState<ColorMode>('source');
   const [overlayOn, setOverlayOn] = useState<boolean>(false);
 
-  const { data: routesData } = useCorpusRoutes();
+  const {
+    data: routesData,
+    loading: routesLoading,
+    error: routesError,
+  } = useCorpusRoutes();
   const routes = routesData ?? EMPTY_ROUTES;
 
   const routeParam = searchParams.get('route');
   const selectedId = routeParam === null ? null : Number(routeParam);
-  const { data: routeDetail } = useCorpusRoute(selectedId);
+  const {
+    data: routeDetail,
+    loading: routeLoading,
+    error: routeError,
+  } = useCorpusRoute(selectedId);
 
   // Static viewport bbox for the facility query. The mocked map never moves in
   // tests; in the app this is a reasonable NY-wide box.
   const viewportBbox: Bbox = [-74.3, 40.4, -73.6, 41.0];
-  const { data: facilitiesData } = useFacilities(
+  const {
+    data: facilitiesData,
+    loading: facilitiesLoading,
+    error: facilitiesError,
+  } = useFacilities(
     viewportBbox,
     [...FACILITY_CLASSES],
     overlayOn,
@@ -177,21 +189,24 @@ export default function MapExplorer() {
   };
 
   return (
-    <main className="relative h-[calc(100vh-4rem)] w-full">
-      <div className="absolute left-3 top-3 z-10 max-w-md rounded-lg bg-zinc-900/90 p-3">
+    <main className="relative h-[calc(100vh-4rem)] w-full overflow-hidden bg-zinc-950">
+      <div className="map-panel absolute left-3 top-3 z-10 w-[min(27rem,calc(100vw-1.5rem))] rounded-lg border border-zinc-800/80 bg-zinc-950/88 p-3 shadow-[0_20px_70px_rgba(0,0,0,0.45)] backdrop-blur-md">
         <FilterBar
           value={filterState}
           colorMode={colorMode}
           onChange={setFilterState}
           onColorModeChange={setColorMode}
         />
-        <label className="mt-2 flex items-center gap-2 text-xs text-zinc-300">
+        <label className="mt-3 flex items-center justify-between gap-3 rounded border border-zinc-800 bg-zinc-950/50 px-2 py-1.5 text-xs text-zinc-300">
+          <span className="text-[11px] uppercase text-zinc-400">
+            Facility overlay
+          </span>
           <input
             type="checkbox"
             checked={overlayOn}
             onChange={(e) => setOverlayOn(e.target.checked)}
+            className="h-4 w-4 accent-lime-300"
           />
-          Facility overlay
         </label>
         <div className="mt-3">
           <Legend
@@ -202,10 +217,48 @@ export default function MapExplorer() {
             showFacilities={overlayOn}
           />
         </div>
+
+        <div className="mt-3 flex flex-wrap gap-1.5 font-mono text-[10px] uppercase">
+          {routesLoading && (
+            <span className="rounded border border-sky-300/30 bg-sky-300/10 px-2 py-1 text-sky-200">
+              Loading routes
+            </span>
+          )}
+          {routesError !== null && (
+            <span className="rounded border border-red-300/30 bg-red-300/10 px-2 py-1 text-red-200">
+              Routes error
+            </span>
+          )}
+          {!routesLoading && routesError === null && routes.features.length === 0 && (
+            <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-400">
+              No routes
+            </span>
+          )}
+          {routeLoading && (
+            <span className="rounded border border-lime-300/30 bg-lime-300/10 px-2 py-1 text-lime-200">
+              Loading detail
+            </span>
+          )}
+          {routeError !== null && (
+            <span className="rounded border border-red-300/30 bg-red-300/10 px-2 py-1 text-red-200">
+              Detail error
+            </span>
+          )}
+          {facilitiesLoading && (
+            <span className="rounded border border-cyan-300/30 bg-cyan-300/10 px-2 py-1 text-cyan-200">
+              Loading facilities
+            </span>
+          )}
+          {facilitiesError !== null && (
+            <span className="rounded border border-red-300/30 bg-red-300/10 px-2 py-1 text-red-200">
+              Facilities error
+            </span>
+          )}
+        </div>
       </div>
 
       {routeDetail !== null && (
-        <div className="absolute right-3 top-3 z-10 w-80 max-w-[90vw]">
+        <div className="absolute inset-x-3 bottom-3 z-20 sm:inset-x-auto sm:bottom-auto sm:right-3 sm:top-3 sm:w-96 sm:max-w-[36vw]">
           <RouteDetailPanel route={routeDetail} onClose={clearSelection} />
         </div>
       )}
@@ -235,6 +288,7 @@ export default function MapExplorer() {
             layout={{ visibility: overlayOn ? 'visible' : 'none' }}
             paint={{
               'line-color': facilityPaintExpression(),
+              'line-opacity': 0.7,
               'line-width': 2,
             }}
           />
@@ -242,10 +296,22 @@ export default function MapExplorer() {
 
         <Source id="routes" type="geojson" data={routes}>
           <Layer
+            id="routes-glow"
+            type="line"
+            paint={{
+              'line-color': lineColorFor(colorMode),
+              'line-blur': 2.5,
+              'line-opacity': 0.32,
+              'line-width': 8,
+            }}
+            filter={buildFilter(filterState)}
+          />
+          <Layer
             id="routes"
             type="line"
             paint={{
               'line-color': lineColorFor(colorMode),
+              'line-opacity': 0.95,
               'line-width': 3,
             }}
             filter={buildFilter(filterState)}

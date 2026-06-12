@@ -307,7 +307,7 @@ and FeatureCollection assembly — unit-tested against a **mocked** client inter
 
 ---
 
-### [ ] S3b — Server JOIN: controllers + routes + mount  *(server join; needs S1,S2,S3a)*
+### [x] S3b — Server JOIN: controllers + routes + mount  *(server join; needs S1,S2,S3a)*
 
 **Goal:** the live `/api/corpus/*` endpoints, end-to-end via supertest.
 
@@ -493,7 +493,7 @@ One commit per green gate, on `feat/map-tab`: `p0: contract + fixture`, `s1: cor
 
 ## 11. Progress (orchestrator ticks)
 - [x] P0 — Foundation + frozen contract + fixture
-- [x] S1 — corpus-client (DB) · [x] S2 — corpus-service + geojson · [x] S3a — error-handler · [ ] S3b — controller/routes JOIN
+- [x] S1 — corpus-client (DB) · [x] S2 — corpus-service + geojson · [x] S3a — error-handler · [x] S3b — controller/routes JOIN
 - [x] C1 — router shell · [x] C2 — data hooks · [x] C3 — encoding utils · [x] C4 — RouteDetailPanel · [x] C5 — FilterBar · [x] C6 — Legend · [ ] C7 — MapExplorer JOIN
 - [ ] Phase 3 — E2E verification
 - [ ] Phase 4 — frontend-design polish

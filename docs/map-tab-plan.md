@@ -247,7 +247,7 @@ C tracks can build in parallel without the server.
 
 ---
 
-### [ ] S1 — Server: `clients/corpus-client.ts` (the Neon read seam)  *(parallel in S*)*
+### [x] S1 — Server: `clients/corpus-client.ts` (the Neon read seam)  *(parallel in S*)*
 
 **Goal:** a deep DB-query module owning all corpus SQL, returning plain data
 (GeoJSON geometry already parsed), tested against the Neon **test branch**.
@@ -275,7 +275,7 @@ C tracks can build in parallel without the server.
 
 ---
 
-### [ ] S2 — Server: `services/corpus-service.ts` + `services/geojson.ts` (pure)  *(parallel in S*)*
+### [x] S2 — Server: `services/corpus-service.ts` + `services/geojson.ts` (pure)  *(parallel in S*)*
 
 **Goal:** business logic with **zero express imports** — param parsing/validation
 and FeatureCollection assembly — unit-tested against a **mocked** client interface.
@@ -296,7 +296,7 @@ and FeatureCollection assembly — unit-tested against a **mocked** client inter
 
 ---
 
-### [ ] S3a — Server: `middleware/error-handler.ts`  *(parallel in S*, independent)*
+### [x] S3a — Server: `middleware/error-handler.ts`  *(parallel in S*, independent)*
 
 **Goal:** the central error handler producing the standard error shape.
 
@@ -327,7 +327,7 @@ and FeatureCollection assembly — unit-tested against a **mocked** client inter
 
 ---
 
-### [ ] C1 — Client: router shell + nav  *(parallel in C*)*
+### [x] C1 — Client: router shell + nav  *(parallel in C*)*
 
 **Goal:** introduce react-router and two tabs without breaking the Generate flow.
 
@@ -347,7 +347,7 @@ and FeatureCollection assembly — unit-tested against a **mocked** client inter
 
 ---
 
-### [ ] C2 — Client: data hooks  *(parallel in C*)*
+### [x] C2 — Client: data hooks  *(parallel in C*)*
 
 **Goal:** `useCorpusRoutes()`, `useCorpusRoute(id)`, `useFacilities(bbox,classes,enabled)` — fetch + loading/error/data state, per the STANDARDS async pattern.
 
@@ -364,7 +364,7 @@ and FeatureCollection assembly — unit-tested against a **mocked** client inter
 
 ---
 
-### [ ] C3 — Client: encoding + map-helper utils (pure)  *(parallel in C*)*
+### [x] C3 — Client: encoding + map-helper utils (pure)  *(parallel in C*)*
 
 **Goal:** all pure map logic, fully unit-tested, so `MapExplorer` stays thin.
 
@@ -380,7 +380,7 @@ and FeatureCollection assembly — unit-tested against a **mocked** client inter
 
 ---
 
-### [ ] C4 — Client: `RouteDetailPanel` (presentational)  *(parallel in C*)*
+### [x] C4 — Client: `RouteDetailPanel` (presentational)  *(parallel in C*)*
 
 **Goal:** the slide-in panel that renders a selected route's full fields **with help-text tooltips** — the "understand my data" surface.
 
@@ -396,7 +396,7 @@ and FeatureCollection assembly — unit-tested against a **mocked** client inter
 
 ---
 
-### [ ] C5 — Client: `FilterBar`  *(parallel in C*)*
+### [x] C5 — Client: `FilterBar`  *(parallel in C*)*
 
 **Goal:** filter controls whose state maps to the predicate consumed by C3's `buildFilter`.
 
@@ -411,7 +411,7 @@ and FeatureCollection assembly — unit-tested against a **mocked** client inter
 
 ---
 
-### [ ] C6 — Client: `Legend`  *(parallel in C*)*
+### [x] C6 — Client: `Legend`  *(parallel in C*)*
 
 **Goal:** legend for route colors (by current color mode) + facility classes.
 
@@ -493,7 +493,7 @@ One commit per green gate, on `feat/map-tab`: `p0: contract + fixture`, `s1: cor
 
 ## 11. Progress (orchestrator ticks)
 - [x] P0 — Foundation + frozen contract + fixture
-- [ ] S1 — corpus-client (DB) · [ ] S2 — corpus-service + geojson · [ ] S3a — error-handler · [ ] S3b — controller/routes JOIN
-- [ ] C1 — router shell · [ ] C2 — data hooks · [ ] C3 — encoding utils · [ ] C4 — RouteDetailPanel · [ ] C5 — FilterBar · [ ] C6 — Legend · [ ] C7 — MapExplorer JOIN
+- [x] S1 — corpus-client (DB) · [x] S2 — corpus-service + geojson · [x] S3a — error-handler · [ ] S3b — controller/routes JOIN
+- [x] C1 — router shell · [x] C2 — data hooks · [x] C3 — encoding utils · [x] C4 — RouteDetailPanel · [x] C5 — FilterBar · [x] C6 — Legend · [ ] C7 — MapExplorer JOIN
 - [ ] Phase 3 — E2E verification
 - [ ] Phase 4 — frontend-design polish

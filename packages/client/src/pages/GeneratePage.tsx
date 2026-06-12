@@ -36,14 +36,14 @@ export default function GeneratePage() {
 
       {/* Hero */}
       <section className="py-16 text-center sm:py-24">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-lime-400/20 bg-lime-400/5 px-4 py-1.5">
-          <Sparkles className="h-3.5 w-3.5 text-lime-400" />
-          <span className="text-xs font-medium text-lime-400">AI-powered route generation</span>
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-leaf-border)] bg-[var(--color-leaf-wash)] px-4 py-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-[var(--color-leaf)]" />
+          <span className="text-xs font-medium text-[var(--color-sage-text)]">AI-powered route generation</span>
         </div>
 
         <h1 className="mb-4 text-4xl font-extrabold tracking-tight text-zinc-100 sm:text-5xl lg:text-6xl">
           Find your perfect<br />
-          <span className="text-lime-400">ride</span>
+          <span className="text-[var(--color-leaf)]">ride</span>
         </h1>
         <p className="mb-10 text-base text-zinc-500 sm:text-lg">
           Describe the ride you're dreaming of. VeloMind AI handles the rest.

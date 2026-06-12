@@ -26,7 +26,7 @@ export default function Legend({
             <div key={s.label} className="flex items-center gap-2">
               <div
                 data-testid="legend-swatch"
-                className="h-2.5 w-2.5 rounded-sm shadow-[0_0_10px_currentColor]"
+                className="h-2.5 w-2.5 rounded-sm border border-stone-950/30"
                 style={{ backgroundColor: s.color }}
               />
               <span className="font-mono text-[10px] uppercase text-zinc-400">

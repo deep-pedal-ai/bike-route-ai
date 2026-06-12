@@ -47,7 +47,11 @@ describe('Header', () => {
         <Header />
       </MemoryRouter>
     );
-    expect(screen.getByRole('link', { name: 'Map' })).toHaveClass('text-lime-400');
-    expect(screen.getByRole('link', { name: 'Generate' })).not.toHaveClass('text-lime-400');
+    expect(screen.getByRole('link', { name: 'Map' })).toHaveClass(
+      'text-[var(--color-leaf)]',
+    );
+    expect(screen.getByRole('link', { name: 'Generate' })).not.toHaveClass(
+      'text-[var(--color-leaf)]',
+    );
   });
 });

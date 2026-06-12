@@ -32,16 +32,16 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
   const p = route.properties;
 
   return (
-    <aside className="detail-panel-motion max-h-[70vh] space-y-4 overflow-auto rounded-lg border border-lime-300/20 bg-zinc-950/95 p-4 text-zinc-200 shadow-[0_0_40px_rgba(0,0,0,0.55)] backdrop-blur-md">
+    <aside className="detail-panel-motion max-h-[70vh] space-y-4 overflow-auto rounded-lg border border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] p-4 text-[var(--color-cream)] shadow-[0_24px_50px_rgba(16,20,15,0.55)] backdrop-blur-md">
       <header className="flex items-start justify-between gap-3">
-        <h2 className="text-balance text-lg font-semibold leading-tight text-zinc-50">
+        <h2 className="text-balance text-lg font-semibold leading-tight text-[var(--color-cream)]">
           {p.name ?? 'Unnamed route'}
         </h2>
         <button
           type="button"
           aria-label="Close route detail"
           onClick={onClose}
-          className="h-8 w-8 rounded border border-zinc-800 text-zinc-500 transition hover:border-lime-300 hover:text-lime-200"
+          className="h-8 w-8 rounded border border-[var(--color-bark-border)] text-[var(--color-moss-muted)] transition hover:border-[var(--color-leaf)] hover:text-[var(--color-cream)]"
         >
           ×
         </button>
@@ -49,7 +49,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
 
       <span
         title={CORPUS_FIELD_DOCS.source}
-        className="inline-block rounded-full border border-lime-300/30 bg-lime-300/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase text-lime-300"
+        className="inline-block rounded-full border border-[var(--color-leaf-border)] bg-[var(--color-leaf-wash)] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase text-[var(--color-leaf)]"
       >
         {p.source}
       </span>
@@ -59,13 +59,13 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
           <dt title={CORPUS_FIELD_DOCS.distance_km} className="text-xs text-zinc-400">
             Distance (km)
           </dt>
-          <dd className="font-mono text-zinc-50">{formatNumber(p.distance_km, 1)}</dd>
+          <dd className="font-mono text-[var(--color-cream)]">{formatNumber(p.distance_km, 1)}</dd>
         </div>
         <div>
           <dt title={CORPUS_FIELD_DOCS.is_loop} className="text-xs text-zinc-400">
             Loop
           </dt>
-          <dd className="font-mono text-zinc-50">
+          <dd className="font-mono text-[var(--color-cream)]">
             {p.is_loop === null ? '—' : p.is_loop ? 'YES' : 'NO'}
           </dd>
         </div>
@@ -73,25 +73,25 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
           <dt title={CORPUS_FIELD_DOCS.ascent_m} className="text-xs text-zinc-400">
             Ascent (m)
           </dt>
-          <dd className="font-mono text-zinc-50">{formatNumber(p.ascent_m, 0)}</dd>
+          <dd className="font-mono text-[var(--color-cream)]">{formatNumber(p.ascent_m, 0)}</dd>
         </div>
         <div>
           <dt title={CORPUS_FIELD_DOCS.descent_m} className="text-xs text-zinc-400">
             Descent (m)
           </dt>
-          <dd className="font-mono text-zinc-50">{formatNumber(p.descent_m, 0)}</dd>
+          <dd className="font-mono text-[var(--color-cream)]">{formatNumber(p.descent_m, 0)}</dd>
         </div>
         <div>
           <dt title={CORPUS_FIELD_DOCS.quality_score} className="text-xs text-zinc-400">
             Quality score
           </dt>
-          <dd className="font-mono text-zinc-50">{formatNumber(p.quality_score, 2)}</dd>
+          <dd className="font-mono text-[var(--color-cream)]">{formatNumber(p.quality_score, 2)}</dd>
         </div>
         <div>
           <dt title={CORPUS_FIELD_DOCS.match_quality} className="text-xs text-zinc-400">
             Match quality
           </dt>
-          <dd className="font-mono text-zinc-50">{formatNumber(p.match_quality, 2)}</dd>
+          <dd className="font-mono text-[var(--color-cream)]">{formatNumber(p.match_quality, 2)}</dd>
         </div>
         <div>
           <dt
@@ -100,7 +100,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
           >
             Protected lane
           </dt>
-          <dd className="font-mono text-zinc-50">
+          <dd className="font-mono text-[var(--color-cream)]">
             {formatFraction(p.protected_lane_fraction)}
           </dd>
         </div>
@@ -111,7 +111,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
           >
             Greenway
           </dt>
-          <dd className="font-mono text-zinc-50">{formatFraction(p.greenway_fraction)}</dd>
+          <dd className="font-mono text-[var(--color-cream)]">{formatFraction(p.greenway_fraction)}</dd>
         </div>
         <div>
           <dt
@@ -120,7 +120,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
           >
             Facility coverage
           </dt>
-          <dd className="font-mono text-zinc-50">
+          <dd className="font-mono text-[var(--color-cream)]">
             {formatFraction(p.facility_coverage_fraction)}
           </dd>
         </div>
@@ -130,7 +130,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
         <h3 title={CORPUS_FIELD_DOCS.surface_breakdown} className="text-xs text-zinc-400">
           Surface
         </h3>
-        <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-zinc-800">
+        <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[var(--color-bark-soft)]">
           {Object.entries(p.surface_breakdown ?? {}).map(([surface, fraction], index) => (
             <div
               key={surface}
@@ -138,7 +138,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
               title={`${surface} ${Math.round(fraction * 100)}%`}
               className={[
                 'h-full',
-                index % 2 === 0 ? 'bg-lime-300/90' : 'bg-sky-300/80',
+                index % 2 === 0 ? 'bg-[var(--color-leaf)]' : 'bg-[var(--color-river)]',
               ].join(' ')}
               style={{ width: `${fraction * 100}%` }}
             />

@@ -1,25 +1,25 @@
-// Route colour encoding. Categorical palette keyed by `source`, harmonised with
-// the app's lime accent (`lime-400` = #a3e635), plus a sequential gradient for
-// `quality_score`. Pure — no React, no MapLibre import.
+// Route colour encoding. Categorical palette keyed by `source`, tuned toward
+// outdoor ride-planning cues: leaf, river, wildflower, and trail paint. Pure —
+// no React, no MapLibre import.
 
 const SOURCE_COLORS: Record<string, string> = {
-  osm_relation: '#a3e635', // lime-400 — the brand accent anchors the primary source
-  canon: '#38bdf8', // sky-400
-  generated: '#f472b6', // pink-400
-  nysdot: '#fbbf24', // amber-400
+  osm_relation: '#86a85e', // leaf — broad public route corpus
+  canon: '#4f9bb0', // river — curated routes
+  generated: '#d9865b', // clay — AI/generated routes
+  nysdot: '#d8aa52', // trail marker — agency routes
 };
 
-const DEFAULT_SOURCE_COLOR = '#a1a1aa'; // zinc-400 — unknown / unmapped source
+const DEFAULT_SOURCE_COLOR = '#969b8c'; // lichen stone — unknown / unmapped source
 
 export function colorBySource(source: string): string {
   return SOURCE_COLORS[source] ?? DEFAULT_SOURCE_COLOR;
 }
 
-// Sequential gradient for quality_score (0..1): dim slate at the low end ramping
-// to the lime accent at the high end, so "good" routes glow in the brand colour.
-const QUALITY_LOW = { r: 0x33, g: 0x41, b: 0x55 }; // slate-700
-const QUALITY_HIGH = { r: 0xa3, g: 0xe6, b: 0x35 }; // lime-400
-const QUALITY_NEUTRAL = '#52525b'; // zinc-600 — null / unscored
+// Sequential gradient for quality_score (0..1): muted soil at the low end,
+// living leaf at the high end. It should read as outdoorsy, not neon.
+const QUALITY_LOW = { r: 0x65, g: 0x67, b: 0x53 }; // olive soil
+const QUALITY_HIGH = { r: 0x86, g: 0xa8, b: 0x5e }; // leaf
+const QUALITY_NEUTRAL = '#666a5d'; // shaded stone — null / unscored
 
 function toHex(channel: number): string {
   return channel.toString(16).padStart(2, '0');

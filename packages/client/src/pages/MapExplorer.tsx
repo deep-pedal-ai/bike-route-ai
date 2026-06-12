@@ -189,23 +189,23 @@ export default function MapExplorer() {
   };
 
   return (
-    <main className="relative h-[calc(100vh-4rem)] w-full overflow-hidden bg-zinc-950">
-      <div className="map-panel absolute left-3 top-3 z-10 w-[min(27rem,calc(100vw-1.5rem))] rounded-lg border border-zinc-800/80 bg-zinc-950/88 p-3 shadow-[0_20px_70px_rgba(0,0,0,0.45)] backdrop-blur-md">
+    <main className="relative h-[calc(100vh-4rem)] w-full overflow-hidden bg-[var(--color-forest)]">
+      <div className="map-panel absolute left-3 top-3 z-10 w-[min(27rem,calc(100vw-1.5rem))] rounded-lg border border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] p-3 shadow-[0_20px_55px_rgba(16,20,15,0.42)] backdrop-blur-md">
         <FilterBar
           value={filterState}
           colorMode={colorMode}
           onChange={setFilterState}
           onColorModeChange={setColorMode}
         />
-        <label className="mt-3 flex items-center justify-between gap-3 rounded border border-zinc-800 bg-zinc-950/50 px-2 py-1.5 text-xs text-zinc-300">
-          <span className="text-[11px] uppercase text-zinc-400">
+        <label className="mt-3 flex items-center justify-between gap-3 rounded border border-[var(--color-bark-border)] bg-[var(--color-bark-soft)] px-2 py-1.5 text-xs text-[var(--color-sage-text)]">
+          <span className="text-[11px] uppercase text-[var(--color-sage-text)]">
             Facility overlay
           </span>
           <input
             type="checkbox"
             checked={overlayOn}
             onChange={(e) => setOverlayOn(e.target.checked)}
-            className="h-4 w-4 accent-lime-300"
+            className="h-4 w-4 accent-[var(--color-leaf)]"
           />
         </label>
         <div className="mt-3">
@@ -220,7 +220,7 @@ export default function MapExplorer() {
 
         <div className="mt-3 flex flex-wrap gap-1.5 font-mono text-[10px] uppercase">
           {routesLoading && (
-            <span className="rounded border border-sky-300/30 bg-sky-300/10 px-2 py-1 text-sky-200">
+            <span className="rounded border border-[var(--color-river)] bg-[var(--color-sky-wash)] px-2 py-1 text-[var(--color-river)]">
               Loading routes
             </span>
           )}
@@ -230,12 +230,12 @@ export default function MapExplorer() {
             </span>
           )}
           {!routesLoading && routesError === null && routes.features.length === 0 && (
-            <span className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-400">
+            <span className="rounded border border-[var(--color-bark-border)] bg-[var(--color-bark-soft)] px-2 py-1 text-[var(--color-sage-text)]">
               No routes
             </span>
           )}
           {routeLoading && (
-            <span className="rounded border border-lime-300/30 bg-lime-300/10 px-2 py-1 text-lime-200">
+            <span className="rounded border border-[var(--color-leaf-border)] bg-[var(--color-leaf-wash)] px-2 py-1 text-[var(--color-leaf)]">
               Loading detail
             </span>
           )}
@@ -245,7 +245,7 @@ export default function MapExplorer() {
             </span>
           )}
           {facilitiesLoading && (
-            <span className="rounded border border-cyan-300/30 bg-cyan-300/10 px-2 py-1 text-cyan-200">
+            <span className="rounded border border-[var(--color-river)] bg-[var(--color-sky-wash)] px-2 py-1 text-[var(--color-river)]">
               Loading facilities
             </span>
           )}
@@ -296,13 +296,12 @@ export default function MapExplorer() {
 
         <Source id="routes" type="geojson" data={routes}>
           <Layer
-            id="routes-glow"
+            id="routes-casing"
             type="line"
             paint={{
-              'line-color': lineColorFor(colorMode),
-              'line-blur': 2.5,
-              'line-opacity': 0.32,
-              'line-width': 8,
+              'line-color': '#223020',
+              'line-opacity': 0.72,
+              'line-width': 6,
             }}
             filter={buildFilter(filterState)}
           />
@@ -319,7 +318,7 @@ export default function MapExplorer() {
         </Source>
       </Map>
 
-      <div className="pointer-events-none absolute bottom-1 right-1 z-10 rounded bg-zinc-900/80 px-2 py-0.5 text-[10px] text-zinc-400">
+      <div className="pointer-events-none absolute bottom-1 right-1 z-10 rounded bg-[var(--color-forest-panel)] px-2 py-0.5 text-[10px] text-[var(--color-sage-text)]">
         {ATTRIBUTION}
       </div>
     </main>

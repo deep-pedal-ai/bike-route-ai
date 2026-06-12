@@ -69,8 +69,8 @@ export default function FilterBar({
               className={[
                 'h-8 rounded border px-2 font-mono text-[11px] uppercase tracking-normal transition',
                 active
-                  ? 'border-lime-300 bg-lime-300 text-zinc-950 shadow-[0_0_18px_rgba(190,242,100,0.35)]'
-                  : 'border-zinc-700/80 bg-zinc-950/70 text-zinc-400 hover:border-zinc-500 hover:text-zinc-100',
+                  ? 'border-[var(--color-leaf)] bg-[var(--color-leaf)] text-[var(--color-forest)]'
+                  : 'border-[var(--color-bark-border)] bg-[var(--color-bark-soft)] text-[var(--color-sage-text)] hover:border-[var(--color-leaf)] hover:text-[var(--color-cream)]',
               ].join(' ')}
             >
               {SOURCE_LABELS[source]}
@@ -87,7 +87,7 @@ export default function FilterBar({
             aria-label="Min distance (km)"
             value={value.minKm ?? ''}
             onChange={(event) => handleNumberChange('minKm', event)}
-            className="h-8 w-full rounded border border-zinc-700/80 bg-zinc-950/80 px-2 font-mono text-sm text-zinc-100 outline-none transition focus:border-lime-300"
+            className="h-8 w-full rounded border border-[var(--color-bark-border)] bg-[var(--color-bark-soft)] px-2 font-mono text-sm text-[var(--color-cream)] outline-none transition focus:border-[var(--color-leaf)]"
           />
         </label>
 
@@ -98,25 +98,25 @@ export default function FilterBar({
             aria-label="Max distance (km)"
             value={value.maxKm ?? ''}
             onChange={(event) => handleNumberChange('maxKm', event)}
-            className="h-8 w-full rounded border border-zinc-700/80 bg-zinc-950/80 px-2 font-mono text-sm text-zinc-100 outline-none transition focus:border-lime-300"
+            className="h-8 w-full rounded border border-[var(--color-bark-border)] bg-[var(--color-bark-soft)] px-2 font-mono text-sm text-[var(--color-cream)] outline-none transition focus:border-[var(--color-leaf)]"
           />
         </label>
       </div>
 
-      <label className="flex items-center justify-between gap-3 rounded border border-zinc-800 bg-zinc-950/50 px-2 py-1.5">
-        <span className="text-[11px] uppercase text-zinc-400">Loops only</span>
+      <label className="flex items-center justify-between gap-3 rounded border border-[var(--color-bark-border)] bg-[var(--color-bark-soft)] px-2 py-1.5">
+        <span className="text-[11px] uppercase text-[var(--color-sage-text)]">Loops only</span>
         <input
           type="checkbox"
           checked={value.loopOnly ?? false}
           onChange={handleLoopChange}
-          className="h-4 w-4 accent-lime-300"
+          className="h-4 w-4 accent-[var(--color-leaf)]"
         />
       </label>
 
       <label className="space-y-1.5">
-        <span className="flex items-center justify-between text-[10px] uppercase text-zinc-500">
+        <span className="flex items-center justify-between text-[10px] uppercase text-[var(--color-moss-muted)]">
           <span>Min quality</span>
-          <span className="font-mono text-zinc-300">{value.minQuality ?? 0}</span>
+          <span className="font-mono text-[var(--color-sage-text)]">{value.minQuality ?? 0}</span>
         </span>
         <input
           type="range"
@@ -124,7 +124,7 @@ export default function FilterBar({
           max={100}
           value={value.minQuality ?? 0}
           onChange={(event) => handleNumberChange('minQuality', event)}
-          className="w-full accent-lime-300"
+          className="w-full accent-[var(--color-leaf)]"
         />
       </label>
 
@@ -132,7 +132,7 @@ export default function FilterBar({
         type="button"
         onClick={toggleColorMode}
         aria-label={`Color mode: ${colorMode}`}
-        className="h-8 w-full rounded border border-zinc-700/80 bg-zinc-950/80 font-mono text-[11px] uppercase text-zinc-300 transition hover:border-lime-300 hover:text-lime-200"
+        className="h-8 w-full rounded border border-[var(--color-bark-border)] bg-[var(--color-bark-soft)] font-mono text-[11px] uppercase text-[var(--color-sage-text)] transition hover:border-[var(--color-leaf)] hover:text-[var(--color-cream)]"
       >
         Color / {colorMode}
       </button>

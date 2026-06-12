@@ -1,110 +1,82 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
+
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+
 import App from './App';
 
-describe('App', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
+type MapComponentProps = { children?: ReactNode };
 
-  it('renders the hero heading', () => {
-    mockFetchSuccess();
-    render(<App />);
+vi.mock('react-map-gl/maplibre', () => {
+  const Map = ({ children }: MapComponentProps): ReactNode => (
+    <div data-testid="maplibre-map">{children}</div>
+  );
+  const Source = ({ children }: MapComponentProps): ReactNode => children ?? null;
+  const Layer = (): ReactNode => null;
+  return { __esModule: true, default: Map, Map, Source, Layer };
+});
+
+vi.mock('./hooks/use-corpus-routes', () => ({
+  useCorpusRoutes: () => ({
+    data: { type: 'FeatureCollection', features: [] },
+    loading: false,
+    error: null,
+  }),
+}));
+
+vi.mock('./hooks/use-corpus-route', () => ({
+  useCorpusRoute: () => ({ data: null, loading: false, error: null }),
+}));
+
+vi.mock('./hooks/use-facilities', () => ({
+  useFacilities: () => ({ data: null, loading: false, error: null }),
+}));
+
+describe('App routing', () => {
+  it('renders the Generate hero at /', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <App />
+      </MemoryRouter>
+    );
     expect(screen.getByText('ride')).toBeInTheDocument();
-  });
-
-  it('renders the search button', () => {
-    mockFetchSuccess();
-    render(<App />);
     expect(screen.getByText('Search Routes')).toBeInTheDocument();
   });
 
-  it('renders the quick query pills', () => {
-    mockFetchSuccess();
-    render(<App />);
-    expect(screen.getByText('Hilly Gravel')).toBeInTheDocument();
-    expect(screen.getByText('Long Road Loop')).toBeInTheDocument();
-    expect(screen.getByText('Flat Greenway')).toBeInTheDocument();
+  it('renders the MapExplorer at /map and not the hero', () => {
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <App />
+      </MemoryRouter>
+    );
+    expect(screen.getByTestId('maplibre-map')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /facility overlay/i })).toBeInTheDocument();
+    expect(screen.queryByText('ride')).not.toBeInTheDocument();
   });
 
-  it('searches and renders returned route cards', async () => {
-    const fetchMock = mockFetchSuccess({
-      filtersRelaxed: false,
-      results: [
-        {
-          id: 'greenway',
-          name: 'Shelby Bottoms Greenway',
-          distanceKm: 20,
-          ascentM: 80,
-          isLoop: true,
-          qualityScore: 0.91,
-          surfaceBreakdown: { paved: 1 },
-          blurb: 'Flat, paved, and mostly separated from traffic.',
-        },
-      ],
-    });
-    render(<App />);
+  it('switches view and active link when the Map nav link is clicked', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <App />
+      </MemoryRouter>
+    );
 
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'flat paved loop' } });
-    fireEvent.click(screen.getByText('Search Routes'));
+    expect(screen.getByText('ride')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Generate' })).toHaveClass(
+      'text-[var(--color-leaf)]',
+    );
 
-    await waitFor(() => expect(screen.getByText('Shelby Bottoms Greenway')).toBeInTheDocument());
-    expect(fetchMock).toHaveBeenCalledWith('/api/routes/search', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ query: 'flat paved loop' }),
-    }));
-  });
+    fireEvent.click(screen.getByRole('link', { name: 'Map' }));
 
-  it('shows relaxed-filter notice from the API response', async () => {
-    mockFetchSuccess({
-      filtersRelaxed: true,
-      results: [
-        {
-          id: 'ridge',
-          name: 'Closest Ridge Ride',
-          distanceKm: 42,
-          ascentM: 600,
-          isLoop: true,
-          qualityScore: null,
-          surfaceBreakdown: null,
-          blurb: 'Closest available match.',
-        },
-      ],
-    });
-    render(<App />);
-
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: '200 km loop' } });
-    fireEvent.click(screen.getByText('Search Routes'));
-
-    await waitFor(() => expect(screen.getByText(/No exact route satisfied/)).toBeInTheDocument());
-  });
-
-  it('shows an error state when search fails', async () => {
-    mockFetchError('Search unavailable');
-    render(<App />);
-
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'quiet loop' } });
-    fireEvent.click(screen.getByText('Search Routes'));
-
-    await waitFor(() => expect(screen.getByText('Search unavailable')).toBeInTheDocument());
+    expect(screen.getByTestId('maplibre-map')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /facility overlay/i })).toBeInTheDocument();
+    expect(screen.queryByText('ride')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Map' })).toHaveClass(
+      'text-[var(--color-leaf)]',
+    );
+    expect(screen.getByRole('link', { name: 'Generate' })).not.toHaveClass(
+      'text-[var(--color-leaf)]',
+    );
   });
 });
-
-function mockFetchSuccess(body: unknown = { results: [], filtersRelaxed: false }) {
-  const fetchMock = vi.fn(async () => createJsonResponse(true, body)) as unknown as typeof fetch;
-  vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
-}
-
-function mockFetchError(message: string) {
-  const fetchMock = vi.fn(async () => createJsonResponse(false, { error: message, statusCode: 500 })) as unknown as typeof fetch;
-  vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
-}
-
-function createJsonResponse(ok: boolean, body: unknown): Response {
-  return {
-    ok,
-    json: async () => body,
-  } as Response;
-}

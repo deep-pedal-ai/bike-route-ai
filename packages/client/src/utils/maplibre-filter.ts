@@ -1,3 +1,5 @@
+import type { FilterSpecification } from 'maplibre-gl';
+
 // Canonical client filter state for the corpus route layer. C5 (FilterBar)
 // mirrors this exact shape and C7 (MapExplorer) reconciles it onto the map, so
 // keep the field names byte-for-byte stable.
@@ -18,8 +20,8 @@ export type FilterState = {
 //     default (a route with no distance/quality can't satisfy a bound).
 //   - loopOnly only constrains when true; false/undefined keeps loops AND
 //     non-loops.
-// Returns `unknown[]` so callers don't need to model MapLibre's expression type.
-export function buildFilter(state: FilterState): unknown[] {
+// Returns MapLibre's filter type so callers can pass it directly to Layer.
+export function buildFilter(state: FilterState): FilterSpecification {
   const clauses: unknown[] = [];
 
   if (state.sources.length > 0) {
@@ -46,5 +48,5 @@ export function buildFilter(state: FilterState): unknown[] {
     clauses.push(['>=', ['get', 'quality_score'], state.minQuality]);
   }
 
-  return ['all', ...clauses];
+  return ['all', ...clauses] as FilterSpecification;
 }

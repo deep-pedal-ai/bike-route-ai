@@ -422,7 +422,7 @@ and FeatureCollection assembly — unit-tested against a **mocked** client inter
 
 ---
 
-### [ ] C7 — Client JOIN: `MapExplorer`  *(client join; needs C1–C6)*
+### [x] C7 — Client JOIN: `MapExplorer`  *(client join; needs C1–C6)*
 
 **Goal:** assemble the map — MapLibre + Carto basemap + route layer + viewport facility overlay + filter + detail panel + legend + URL sync. **Thin shell; logic already lives in tested utils/hooks.**
 
@@ -494,6 +494,6 @@ One commit per green gate, on `feat/map-tab`: `p0: contract + fixture`, `s1: cor
 ## 11. Progress (orchestrator ticks)
 - [x] P0 — Foundation + frozen contract + fixture
 - [x] S1 — corpus-client (DB) · [x] S2 — corpus-service + geojson · [x] S3a — error-handler · [x] S3b — controller/routes JOIN
-- [x] C1 — router shell · [x] C2 — data hooks · [x] C3 — encoding utils · [x] C4 — RouteDetailPanel · [x] C5 — FilterBar · [x] C6 — Legend · [ ] C7 — MapExplorer JOIN
+- [x] C1 — router shell · [x] C2 — data hooks · [x] C3 — encoding utils · [x] C4 — RouteDetailPanel · [x] C5 — FilterBar · [x] C6 — Legend · [x] C7 — MapExplorer JOIN
 - [ ] Phase 3 — E2E verification
 - [ ] Phase 4 — frontend-design polish

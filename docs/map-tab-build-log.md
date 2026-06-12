@@ -125,3 +125,31 @@ Coverage ≥70% is gated at the joins (S3b / C7), where the plan places it.
 **Notes**
 - The sandboxed run cannot bind a local server or resolve Neon DNS; verification above
   was run with the required localhost + network approval.
+
+---
+
+## C7 — Client JOIN: MapExplorer  ✅ gate: pass
+
+**Done**
+- Assembled the `/map` surface with MapLibre, Carto dark-matter style, route and
+  facility GeoJSON sources/layers, filter controls, legend, URL-backed selection,
+  detail panel, and visible Carto/OSM/ODbL attribution.
+- Added `MapExplorer.test.tsx` with logic-only jsdom coverage for deep-link selection,
+  facility overlay enablement, filter-to-layer wiring, and color-mode paint changes.
+- Updated `App.test.tsx` to mock the WebGL map boundary and assert the real Map tab
+  controls instead of the retired placeholder.
+- Tightened `buildFilter` to return MapLibre's `FilterSpecification` so the route
+  layer consumes it without component-side casts.
+
+**Verification**
+- `npm test -w packages/client`: 23 files / 132 tests passed.
+- `npm exec -- tsc --noEmit -p packages/client/tsconfig.json` clean.
+- `npm exec -- eslint packages/client` clean.
+- `npm run coverage -w packages/client` passed the configured ≥70% threshold.
+
+**Follow-ups carried to Phase 3/4**
+- Initial route auto-fit is still mount-only; fix with controlled view state or
+  map ref `fitBounds` during Phase 4 motion/states.
+- Facility bbox is still a static NY-wide query box; live viewport wiring remains
+  a Phase 4 enhancement.
+- Real route clicks and canvas rendering remain Phase 3 Playwright coverage.

@@ -1,7 +1,37 @@
-import { describe, it, expect } from 'vitest';
+import type { ReactNode } from 'react';
+
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+
 import App from './App';
+
+type MapComponentProps = { children?: ReactNode };
+
+vi.mock('react-map-gl/maplibre', () => {
+  const Map = ({ children }: MapComponentProps): ReactNode => (
+    <div data-testid="maplibre-map">{children}</div>
+  );
+  const Source = ({ children }: MapComponentProps): ReactNode => children ?? null;
+  const Layer = (): ReactNode => null;
+  return { __esModule: true, default: Map, Map, Source, Layer };
+});
+
+vi.mock('./hooks/use-corpus-routes', () => ({
+  useCorpusRoutes: () => ({
+    data: { type: 'FeatureCollection', features: [] },
+    loading: false,
+    error: null,
+  }),
+}));
+
+vi.mock('./hooks/use-corpus-route', () => ({
+  useCorpusRoute: () => ({ data: null, loading: false, error: null }),
+}));
+
+vi.mock('./hooks/use-facilities', () => ({
+  useFacilities: () => ({ data: null, loading: false, error: null }),
+}));
 
 describe('App routing', () => {
   it('renders the Generate hero at /', () => {
@@ -25,13 +55,14 @@ describe('App routing', () => {
     expect(screen.getByText('Easy Path Cruise')).toBeInTheDocument();
   });
 
-  it('renders the MapExplorer placeholder at /map and not the hero', () => {
+  it('renders the MapExplorer at /map and not the hero', () => {
     render(
       <MemoryRouter initialEntries={['/map']}>
         <App />
       </MemoryRouter>
     );
-    expect(screen.getByText('Explore the corpus')).toBeInTheDocument();
+    expect(screen.getByTestId('maplibre-map')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /facility overlay/i })).toBeInTheDocument();
     expect(screen.queryByText('ride')).not.toBeInTheDocument();
   });
 
@@ -47,7 +78,8 @@ describe('App routing', () => {
 
     fireEvent.click(screen.getByRole('link', { name: 'Map' }));
 
-    expect(screen.getByText('Explore the corpus')).toBeInTheDocument();
+    expect(screen.getByTestId('maplibre-map')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /facility overlay/i })).toBeInTheDocument();
     expect(screen.queryByText('ride')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Map' })).toHaveClass('text-lime-400');
     expect(screen.getByRole('link', { name: 'Generate' })).not.toHaveClass('text-lime-400');

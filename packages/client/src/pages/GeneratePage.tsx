@@ -1,42 +1,19 @@
-import { useState } from 'react';
 import { AlertTriangle, Bike, Sparkles } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
 import QuickQueries from '../components/QuickQueries';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import RouteResults from '../components/RouteResults';
-import { searchRoutes } from '../api/route-search';
-import type { RouteSearchResult } from '@bike-route-ai/shared';
+import { useRouteSearch } from '../hooks/use-route-search';
 
 export default function GeneratePage() {
-  const [query, setQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState<RouteSearchResult[] | null>(null);
-  const [filtersRelaxed, setFiltersRelaxed] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { query, setQuery, isLoading, results, filtersRelaxed, error, search } =
+    useRouteSearch();
 
-  const generate = async (q: string) => {
-    if (!q.trim() || isLoading) return;
-    setIsLoading(true);
-    setResults(null);
-    setFiltersRelaxed(false);
-    setError(null);
-
-    try {
-      const response = await searchRoutes(q.trim());
-      setResults(response.results);
-      setFiltersRelaxed(response.filtersRelaxed);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Route search failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGenerate = () => generate(query);
+  const handleGenerate = () => search(query);
 
   const handleQuickSelect = (q: string) => {
     setQuery(q);
-    generate(q);
+    search(q);
   };
 
   return (

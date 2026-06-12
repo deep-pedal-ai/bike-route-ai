@@ -76,3 +76,34 @@
 .detail-panel-motion {
   animation: detailPanelIn 0.32s ease-out both;
 }
+
+@keyframes searchPanelIn {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.search-panel-motion {
+  animation: searchPanelIn 0.32s ease-out both;
+}
+
+/* Honor reduced-motion across the map panels: keep the fade, drop the slide. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes searchPanelIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .search-panel-motion {
+    animation-duration: 0.01ms;
+  }
+}

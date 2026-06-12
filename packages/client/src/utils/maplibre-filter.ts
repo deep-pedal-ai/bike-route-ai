@@ -50,3 +50,24 @@ export function buildFilter(state: FilterState): FilterSpecification {
 
   return ['all', ...clauses] as FilterSpecification;
 }
+
+// Id-membership filter for the search → map id-join. ⚠️ The single highest-risk
+// detail of this feature: the corpus layer stores `properties.id` as a NUMBER
+// (fixtures: 4, 286) while search results carry `id` as a STRING. Comparing the
+// raw values silently matches nothing. We normalize the feature side with
+// `to-string` and require callers to pass already-stringified ids, so both
+// sides are strings before comparison.
+//
+//   - buildIdFilter([])        → `['any']` → matches nothing (an empty OR is
+//     false). Used as the "no results yet" / "no mappable routes" guard.
+//   - buildIdFilter(['4','9']) → keeps features whose id is 4 or 9, whether the
+//     prop is the number 4 or the string '4'.
+//
+// Spelled as an OR of equalities (not the legacy `['in', key, …vals]` filter
+// form, which is not a valid expression in maplibre-gl@5 — see buildFilter).
+export function buildIdFilter(ids: string[]): FilterSpecification {
+  return [
+    'any',
+    ...ids.map((id) => ['==', ['to-string', ['get', 'id']], id]),
+  ] as FilterSpecification;
+}

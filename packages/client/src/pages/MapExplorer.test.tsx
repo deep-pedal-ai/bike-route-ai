@@ -303,9 +303,11 @@ describe('MapExplorer — map-tab search', () => {
     submitSearch('two routes');
     await screen.findByText('Aqueduct Trail');
 
+    // Results panel (left) + search bar (top) are open, so their footprint is
+    // reserved; the right side keeps the plain gutter.
     expect(fitBoundsSpy).toHaveBeenCalledWith(
       boundsForIds(['286', '4']),
-      expect.objectContaining({ padding: 64 }),
+      expect.objectContaining({ padding: { top: 224, bottom: 64, left: 452, right: 64 } }),
     );
   });
 
@@ -360,10 +362,11 @@ describe('MapExplorer — map-tab search', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /focus aqueduct trail/i }));
 
-    // Camera frames the clicked route…
+    // Camera frames the clicked route, reserving space for the results panel
+    // (left), the about-to-open detail panel (right), and the search bar (top).
     expect(fitBoundsSpy).toHaveBeenCalledWith(
       boundsForIds(['286']),
-      expect.objectContaining({ padding: 64 }),
+      expect.objectContaining({ padding: { top: 224, bottom: 64, left: 452, right: 420 } }),
     );
     // …and the detail panel opens for that id (Number-normalized).
     expect(mockedUseCorpusRoute).toHaveBeenCalledWith(286);

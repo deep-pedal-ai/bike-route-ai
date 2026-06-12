@@ -46,6 +46,10 @@ const FACILITY_CLASSES = ['protected', 'lane', 'sharrow', 'greenway', 'other'] a
 // Sensible NY default centre used until routes load.
 const NY_DEFAULT = { longitude: -73.95, latitude: 40.7, zoom: 10 };
 
+// Baseline breathing room (px) between a framed route and the map edge. The
+// per-panel padding in framePadding builds on top of this.
+const MAP_GUTTER = 64;
+
 const CARTO_DARK_MATTER =
   'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
@@ -210,14 +214,45 @@ export default function MapExplorer() {
   const focusBounds = useCallback(
     (
       bounds: [[number, number], [number, number]],
-      opts?: { duration?: number; maxZoom?: number },
+      opts?: {
+        duration?: number;
+        maxZoom?: number;
+        padding?: number | { top: number; bottom: number; left: number; right: number };
+      },
     ) => {
       mapRef.current?.fitBounds(bounds, {
-        padding: 64,
+        padding: MAP_GUTTER,
         duration: 600,
         maxZoom: 15,
         ...opts,
       });
+    },
+    [],
+  );
+
+  // Asymmetric fitBounds padding so a framed route lands in the strip of map the
+  // floating panels don't cover. Each side reserves its panel's footprint (px)
+  // when that panel is showing, otherwise a plain gutter. Clamped to the live
+  // map size so narrow viewports (where panels span full width) can't ask for
+  // padding wider than the map, which MapLibre rejects.
+  const framePadding = useCallback(
+    (sides: { left?: boolean; right?: boolean; top?: boolean }) => {
+      const pad = {
+        top: sides.top ? 224 : MAP_GUTTER, // top-center search bar
+        bottom: MAP_GUTTER,
+        left: sides.left ? 452 : MAP_GUTTER, // 26rem results panel + offset + breathing room
+        right: sides.right ? 420 : MAP_GUTTER, // 24rem detail panel + offset + breathing room
+      };
+      const container = mapRef.current?.getContainer?.();
+      if (container) {
+        const maxX = Math.max(MAP_GUTTER, (container.clientWidth - 96) / 2);
+        const maxY = Math.max(MAP_GUTTER, (container.clientHeight - 96) / 2);
+        pad.left = Math.min(pad.left, maxX);
+        pad.right = Math.min(pad.right, maxX);
+        pad.top = Math.min(pad.top, maxY);
+        pad.bottom = Math.min(pad.bottom, maxY);
+      }
+      return pad;
     },
     [],
   );
@@ -269,8 +304,11 @@ export default function MapExplorer() {
     );
     if (mappable.length === 0) return;
     fittedResultsRef.current = search.results;
-    focusBounds(fitBoundsFromFeatures({ type: 'FeatureCollection', features: mappable }));
-  }, [search.results, routes, focusBounds]);
+    // Results panel (left) and search bar (top) are open here; reserve their space.
+    focusBounds(fitBoundsFromFeatures({ type: 'FeatureCollection', features: mappable }), {
+      padding: framePadding({ left: true, top: true }),
+    });
+  }, [search.results, routes, focusBounds, framePadding]);
 
   const clearSelection = () => {
     const next = new URLSearchParams(searchParams);
@@ -289,7 +327,10 @@ export default function MapExplorer() {
   const handleSelectResult = (id: string) => {
     const bounds = boundsForRouteId(routes, id);
     if (bounds === null) return;
-    focusBounds(bounds);
+    // Selecting frames one route with the results panel (left) open and the
+    // detail panel (right) about to open, under the top search bar — reserve
+    // all three so the route stays clear of every floating panel.
+    focusBounds(bounds, { padding: framePadding({ left: true, right: true, top: true }) });
     selectRoute(id);
   };
 

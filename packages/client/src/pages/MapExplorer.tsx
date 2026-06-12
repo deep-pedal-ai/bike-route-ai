@@ -23,6 +23,11 @@ import type {
 } from '@bike-route-ai/shared';
 
 type ColorMode = 'source' | 'quality';
+type MapView = {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+};
 
 const SOURCES = ['osm_relation', 'canon', 'generated', 'nysdot'] as const;
 const FACILITY_CLASSES = ['protected', 'lane', 'sharrow', 'greenway', 'other'] as const;
@@ -94,12 +99,24 @@ function facilityPaintExpression(): ExpressionSpecification {
   ] as unknown as ExpressionSpecification;
 }
 
-// Centre derived from the route bounds; NY default while empty.
-function viewFromRoutes(routes: CorpusRoutesResponse): {
-  longitude: number;
-  latitude: number;
-  zoom: number;
-} {
+function mercatorY(lat: number): number {
+  const sin = Math.sin((lat * Math.PI) / 180);
+  return 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
+}
+
+function fitZoom(west: number, south: number, east: number, north: number): number {
+  const tileSize = 512;
+  const viewportWidth = Math.max(window.innerWidth - 240, 320);
+  const viewportHeight = Math.max(window.innerHeight - 180, 320);
+  const lonSpan = Math.max(east - west, 0.001);
+  const mercatorSpan = Math.max(Math.abs(mercatorY(south) - mercatorY(north)), 0.00001);
+  const zoomX = Math.log2((viewportWidth * 360) / (tileSize * lonSpan));
+  const zoomY = Math.log2(viewportHeight / (tileSize * mercatorSpan));
+  return Math.max(5, Math.min(10, Math.min(zoomX, zoomY)));
+}
+
+// Centre and zoom derived from route bounds; NY default while empty.
+function viewFromRoutes(routes: CorpusRoutesResponse): MapView {
   if (routes.features.length === 0) {
     return NY_DEFAULT;
   }
@@ -107,7 +124,7 @@ function viewFromRoutes(routes: CorpusRoutesResponse): {
   return {
     longitude: (west + east) / 2,
     latitude: (south + north) / 2,
-    zoom: 10,
+    zoom: fitZoom(west, south, east, north),
   };
 }
 
@@ -194,6 +211,7 @@ export default function MapExplorer() {
       )}
 
       <Map
+        key={`${view.longitude}:${view.latitude}:${view.zoom}`}
         initialViewState={view}
         mapStyle={CARTO_DARK_MATTER}
         interactiveLayerIds={['routes']}

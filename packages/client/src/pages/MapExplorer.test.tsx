@@ -13,12 +13,18 @@ import fixture from '../fixtures/corpus-sample.json';
 // imports (vi.mock is hoisted), so the prop-capture spy is created via
 // vi.hoisted. Each map component renders its children so nested Source/Layer
 // still mount; Layer records its props for assertions.
-const { layerSpy } = vi.hoisted(() => ({ layerSpy: vi.fn() }));
+const { layerSpy, mapSpy } = vi.hoisted(() => ({
+  layerSpy: vi.fn(),
+  mapSpy: vi.fn(),
+}));
 
 type MapComponentProps = Record<string, unknown> & { children?: ReactNode };
 
 vi.mock('react-map-gl/maplibre', () => {
-  const Map = (props: MapComponentProps): ReactNode => props.children ?? null;
+  const Map = (props: MapComponentProps): ReactNode => {
+    mapSpy(props);
+    return props.children ?? null;
+  };
   const Source = (props: MapComponentProps): ReactNode => props.children ?? null;
   const Layer = (props: MapComponentProps): ReactNode => {
     layerSpy(props);
@@ -54,6 +60,7 @@ function renderAt(path: string) {
 
 beforeEach(() => {
   layerSpy.mockClear();
+  mapSpy.mockClear();
   mockedUseCorpusRoutes.mockReturnValue({
     data: fixture.routes as never,
     loading: false,
@@ -127,5 +134,15 @@ describe('MapExplorer', () => {
 
     const after = routeLayerProps()?.paint;
     expect(after).not.toEqual(before);
+  });
+
+  it('fits the initial map view to loaded corpus bounds instead of using the narrow NY default', () => {
+    renderAt('/map');
+
+    const props = mapSpy.mock.calls.at(-1)?.[0] as
+      | { initialViewState?: { zoom?: number } }
+      | undefined;
+
+    expect(props?.initialViewState?.zoom).toBeLessThan(10);
   });
 });

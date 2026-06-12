@@ -153,3 +153,50 @@ Coverage ≥70% is gated at the joins (S3b / C7), where the plan places it.
 - Facility bbox is still a static NY-wide query box; live viewport wiring remains
   a Phase 4 enhancement.
 - Real route clicks and canvas rendering remain Phase 3 Playwright coverage.
+
+---
+
+## Phase 3 — Live E2E verification  ✅ gate: pass
+
+**Done**
+- Started `npm run dev` from the repo root: server on `:3000`, client on `:8080`.
+- Confirmed local `.env` runtime `DATABASE_URL` and `TEST_DATABASE_URL` point at distinct
+  Neon hosts; runtime stayed on the live main URL for browser verification.
+- Fixed the C7 auto-fit follow-up before E2E completion: `MapExplorer` now computes a
+  fitted initial zoom from loaded corpus bounds and remounts MapLibre when route data
+  arrives. Added a regression test so the loaded corpus does not stay at narrow zoom 10.
+
+**Live checks**
+- `http://localhost:8080/map` loads with a mounted MapLibre canvas (`1280x656`) and
+  visible Carto + OpenStreetMap/ODbL attribution.
+- Carto dark-matter style returned HTTP 200.
+- Live `/api/corpus/routes` returned HTTP 200 with 149 routes; first coordinate
+  `[-73.585925, 43.3019744]` is inside the NY bbox. Live stats returned bbox
+  `[-75.087002, 40.224332, -72.7621982, 44.184074]` and expected source counts.
+- Projected live route coordinates into the fitted viewport; 7,285 route coordinates
+  landed inside the visible canvas. Screenshot confirms routes render over land in the
+  NYC/NY region, not in the ocean.
+- Clicking a rendered live route opened `/map?route=144` with the Bear Mountain detail
+  panel, real fields, and field-description tooltips.
+- Facility overlay enabled successfully; live viewport query returned 2,000 features
+  (`truncated: true`) from `/api/corpus/facilities`.
+- Selecting the `canon` source filter visibly reduced the map to the canon subset and
+  left the filter button in `aria-pressed=true`.
+- Cold-loading `http://localhost:8080/map?route=144` opened the detail panel directly.
+- Browser console errors/warnings: none.
+
+**Artifacts**
+- All-source map screenshot: `docs/map-tab-phase3.png`
+- Canon-filter screenshot: `docs/map-tab-phase3-canon-filter.png`
+
+**Verification**
+- `npm test -w packages/client`: 23 files / 133 tests passed.
+- `npm exec -- tsc --noEmit -p packages/client/tsconfig.json` clean.
+- `npm exec -- eslint packages/client` clean.
+- `npm run coverage -w packages/client` passed the configured ≥70% threshold.
+- `npm run ci` green: lint, typecheck, client tests (133), server tests (36 with live
+  Neon test branch).
+
+**Remaining follow-up**
+- Facility bbox is still static NY-wide rather than wired to live map viewport movement;
+  carry into Phase 4 polish/enhancement.

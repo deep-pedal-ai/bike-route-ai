@@ -1,0 +1,38 @@
+metro_boundary.geojson — Freewheel metro query / clip boundary
+==============================================================
+
+WHAT
+  A single hand-drawn GeoJSON Polygon (one Feature) bounding the corpus's
+  in-scope region. Phase 1 turns it into the Overpass `poly:` filter; Phase 2
+  clips NYSDOT features to it. It is the QUERY/CLIP boundary, NOT the routing
+  graph extent.
+
+COORDINATE ORDER  (read this — it is the highest-risk bug class in this repo)
+  This file is RFC 7946 GeoJSON: coordinates are [longitude, latitude].
+  This is the OPPOSITE of config/canon.yaml, which is human [latitude, longitude].
+  metro.py loads this file and asserts EVERY exterior vertex lies within the
+  metro-bounds guard (lat 40-42, lon -75..-73) so a transposed file fails LOUDLY
+  at load time. Phase 1 flips the order once more for Overpass (which wants
+  "lat lon lat lon ...", latitude first).
+
+COVERAGE
+  - The five NYC boroughs (Manhattan, Bronx, Brooklyn, Queens, Staten Island).
+  - Hudson / Bergen NJ up the west bank via 9W to Piermont and Nyack.
+  - Westchester north to ~Peekskill.
+  - Rockland County.
+  - Nassau County (Long Island), east to the lon -73 guard edge.
+
+TUNING / VERIFICATION
+  The polygon was tuned against the live data so that:
+    - the NYSDOT State Bike Routes layer clips to EXACTLY 2 features —
+      OBJECTID 821 (State Bike Route 9) and 813 (State Bike Route 25A) — matching
+      the live-DB oracle; and
+    - the OSM `route=bicycle` relation query lands in the expected ~120-130 range.
+  Each edit to this polygon changes the Overpass query string, which auto-busts
+  the disk cache. OSM relation counts drift day-to-day, so the firm constraint is
+  NYSDOT == 2; the OSM count is recorded, not over-tuned.
+
+ROUTING-EXTENT NOTE (for later phases)
+  A self-hosted ORS / Valhalla graph extract must cover the bbox of ALL stored
+  route geometry (canon rides, generated loops, map-matched NYSDOT segments can
+  extend beyond this polygon) — NOT merely this boundary.

@@ -1,0 +1,40 @@
+{
+  "version": 0.6,
+  "generator": "synthetic fixture for the WP5 Phase-1 integration test",
+  "elements": [
+    {
+      "type": "relation",
+      "id": 900001,
+      "members": [
+        {
+          "type": "way",
+          "ref": 70001,
+          "role": "",
+          "geometry": [
+            {"lat": 40.7500, "lon": -73.9900},
+            {"lat": 40.7500, "lon": -73.9800},
+            {"lat": 40.7500, "lon": -73.9700}
+          ]
+        },
+        {
+          "type": "way",
+          "ref": 70002,
+          "role": "",
+          "geometry": [
+            {"lat": 40.7500, "lon": -73.9700},
+            {"lat": 40.7500, "lon": -73.9600},
+            {"lat": 40.7500, "lon": -73.9500}
+          ]
+        }
+      ],
+      "tags": {
+        "type": "route",
+        "route": "bicycle",
+        "name": "Test Greenway",
+        "network": "lcn",
+        "operator": "Test DOT",
+        "distance": "3.4"
+      }
+    }
+  ]
+}

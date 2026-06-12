@@ -60,7 +60,7 @@ describe('FilterBar', () => {
     const onChange = vi.fn();
     render(
       <FilterBar
-        value={{ sources: [], minKm: 5, maxKm: 40, loopOnly: true, minQuality: 60 }}
+        value={{ sources: [], minKm: 5, maxKm: 40, loopOnly: true, minQuality: 0.6 }}
         colorMode="source"
         onChange={onChange}
         onColorModeChange={vi.fn()}
@@ -74,7 +74,7 @@ describe('FilterBar', () => {
       minKm: 5,
       maxKm: 40,
       loopOnly: true,
-      minQuality: 60,
+      minQuality: 0.6,
     });
   });
 
@@ -164,7 +164,7 @@ describe('FilterBar', () => {
     expect(onChange).toHaveBeenCalledWith({ sources: [], loopOnly: false });
   });
 
-  it('emits a numeric minQuality when the quality slider changes', () => {
+  it('emits normalized minQuality when the 0-100 quality slider changes', () => {
     const onChange = vi.fn();
     render(
       <FilterBar
@@ -179,7 +179,21 @@ describe('FilterBar', () => {
       target: { value: '75' },
     });
 
-    expect(onChange).toHaveBeenCalledWith({ sources: [], minQuality: 75 });
+    expect(onChange).toHaveBeenCalledWith({ sources: [], minQuality: 0.75 });
+  });
+
+  it('renders a normalized minQuality as a 0-100 percent slider value', () => {
+    render(
+      <FilterBar
+        value={{ sources: [], minQuality: 0.6 }}
+        colorMode="source"
+        onChange={vi.fn()}
+        onColorModeChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('60%')).toBeInTheDocument();
+    expect(screen.getByLabelText(/quality/i)).toHaveValue('60');
   });
 
   it('flips color mode from source to quality', () => {

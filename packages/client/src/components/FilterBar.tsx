@@ -1,12 +1,7 @@
 import type { ChangeEvent } from 'react';
+import type { FilterState } from '../utils/maplibre-filter';
 
-export type FilterState = {
-  sources: string[];
-  minKm?: number;
-  maxKm?: number;
-  loopOnly?: boolean;
-  minQuality?: number;
-};
+export type { FilterState } from '../utils/maplibre-filter';
 
 type ColorMode = 'source' | 'quality';
 
@@ -25,6 +20,10 @@ const SOURCE_LABELS: Record<(typeof SOURCES)[number], string> = {
   nysdot: 'NYSDOT',
 };
 
+function qualityPercent(minQuality: number | undefined): number {
+  return Math.round((minQuality ?? 0) * 100);
+}
+
 export default function FilterBar({
   value,
   colorMode,
@@ -39,11 +38,15 @@ export default function FilterBar({
   };
 
   const handleNumberChange = (
-    key: 'minKm' | 'maxKm' | 'minQuality',
+    key: 'minKm' | 'maxKm',
     event: ChangeEvent<HTMLInputElement>,
   ) => {
     const raw = event.target.value;
     onChange({ ...value, [key]: raw === '' ? undefined : Number(raw) });
+  };
+
+  const handleQualityChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onChange({ ...value, minQuality: Number(event.target.value) / 100 });
   };
 
   const handleLoopChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -116,14 +119,14 @@ export default function FilterBar({
       <label className="space-y-1.5">
         <span className="flex items-center justify-between text-[10px] uppercase text-[var(--color-moss-muted)]">
           <span>Min quality</span>
-          <span className="font-mono text-[var(--color-sage-text)]">{value.minQuality ?? 0}</span>
+          <span className="font-mono text-[var(--color-sage-text)]">{qualityPercent(value.minQuality)}%</span>
         </span>
         <input
           type="range"
           min={0}
           max={100}
-          value={value.minQuality ?? 0}
-          onChange={(event) => handleNumberChange('minQuality', event)}
+          value={qualityPercent(value.minQuality)}
+          onChange={handleQualityChange}
           className="w-full accent-[var(--color-leaf)]"
         />
       </label>

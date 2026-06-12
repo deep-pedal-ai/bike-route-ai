@@ -101,3 +101,27 @@ any agent — the frozen contract held.
 
 **Commits:** `s1`, `s2`, `s3a`, `c1`, `c2`, `c3`, `c4`, `c5`, `c6` (one per WP).
 Coverage ≥70% is gated at the joins (S3b / C7), where the plan places it.
+
+---
+
+## S3b — Server JOIN: controllers + routes + mount  ✅ gate: pass
+
+**Done**
+- Mounted `/api/corpus` in `app.ts` and registered the central `errorHandler` last.
+- Added thin corpus controller handlers and the `/routes`, `/routes/:id`, `/facilities`,
+  and `/stats` router wiring.
+- Fixed the real Supertest harness flake by reusing one persistent localhost server
+  per route test file, including the pre-existing `routes.test.ts` that exhibited the
+  same random bare-404 behavior.
+
+**Verification**
+- `npm test -w packages/server` passed once after the harness fix, then passed **10/10**
+  repeated full-suite runs against the Neon test branch: 6 files / 36 tests each run,
+  with 0 intermittent 404s.
+- `npm exec -- eslint packages/server` clean.
+- `npm exec -- tsc --noEmit -p packages/server/tsconfig.json` clean.
+- `npm run coverage -w packages/server` passed the configured ≥70% threshold.
+
+**Notes**
+- The sandboxed run cannot bind a local server or resolve Neon DNS; verification above
+  was run with the required localhost + network approval.

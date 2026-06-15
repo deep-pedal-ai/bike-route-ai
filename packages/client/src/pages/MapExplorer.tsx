@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Map, Source, Layer } from 'react-map-gl/maplibre';
 import { useSearchParams } from 'react-router-dom';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -6,20 +6,31 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import FilterBar from '../components/FilterBar';
 import Legend from '../components/Legend';
 import RouteDetailPanel from '../components/RouteDetailPanel';
+import SearchBar from '../components/SearchBar';
+import SearchResultsPanel from '../components/SearchResultsPanel';
 import { useCorpusRoutes } from '../hooks/use-corpus-routes';
 import { useCorpusRoute } from '../hooks/use-corpus-route';
 import { useFacilities } from '../hooks/use-facilities';
+import { useRouteSearch } from '../hooks/use-route-search';
 import { colorBySource, colorByQuality } from '../utils/route-color';
 import { facilityColor } from '../utils/facility-color';
-import { buildFilter } from '../utils/maplibre-filter';
+import { buildFilter, buildIdFilter } from '../utils/maplibre-filter';
 import { fitBoundsFromFeatures } from '../utils/bounds';
+import {
+  boundsForRouteId,
+  routeOpacityExpression,
+  CASING_FULL_OPACITY,
+  CASING_DIM_OPACITY,
+} from '../utils/route-search-view';
 
+import type { MapRef } from 'react-map-gl/maplibre';
 import type { ExpressionSpecification } from 'maplibre-gl';
 import type { FilterState } from '../utils/maplibre-filter';
 import type {
   Bbox,
   CorpusRoutesResponse,
   FacilitiesResponse,
+  RouteSearchResult,
 } from '@bike-route-ai/shared';
 
 type ColorMode = 'source' | 'quality';
@@ -34,6 +45,10 @@ const FACILITY_CLASSES = ['protected', 'lane', 'sharrow', 'greenway', 'other'] a
 
 // Sensible NY default centre used until routes load.
 const NY_DEFAULT = { longitude: -73.95, latitude: 40.7, zoom: 10 };
+
+// Baseline breathing room (px) between a framed route and the map edge. The
+// per-panel padding in framePadding builds on top of this.
+const MAP_GUTTER = 64;
 
 const CARTO_DARK_MATTER =
   'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
@@ -146,6 +161,14 @@ export default function MapExplorer() {
   const [colorMode, setColorMode] = useState<ColorMode>('source');
   const [overlayOn, setOverlayOn] = useState<boolean>(false);
 
+  // Natural-language route search (shared with the Generate page). Id of the
+  // result route the user is pointing at (string-normalized) drives the routes
+  // layer's line-opacity: hovered route bright, others dimmed (D4).
+  const search = useRouteSearch();
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // Wraps the floating SearchBar so focus can return to it when the panel closes.
+  const searchFieldRef = useRef<HTMLDivElement>(null);
+
   const {
     data: routesData,
     loading: routesLoading,
@@ -176,21 +199,200 @@ export default function MapExplorer() {
 
   const view = viewFromRoutes(routes);
 
+  // --- Imperative camera. The old `<Map key=…>` remount threw the camera away
+  // on every view change and could not animate. We hold a ref to the map and
+  // drive it directly via fitBounds. `initialViewState` still seeds the first
+  // paint (and is the fitted view in tests), but once the map is loaded the
+  // camera is ours to move. ---
+  const mapRef = useRef<MapRef>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const didInitialFitRef = useRef(false);
+
+  // Animate the camera to frame `bounds`. Dormant infrastructure for the search
+  // feature (hover/click zoom land in later phases); the initial fit-to-all is
+  // its first caller so the wiring is exercised, not dead.
+  const focusBounds = useCallback(
+    (
+      bounds: [[number, number], [number, number]],
+      opts?: {
+        duration?: number;
+        maxZoom?: number;
+        padding?: number | { top: number; bottom: number; left: number; right: number };
+      },
+    ) => {
+      mapRef.current?.fitBounds(bounds, {
+        padding: MAP_GUTTER,
+        duration: 600,
+        maxZoom: 15,
+        ...opts,
+      });
+    },
+    [],
+  );
+
+  // Asymmetric fitBounds padding so a framed route lands in the strip of map the
+  // floating panels don't cover. Each side reserves its panel's footprint (px)
+  // when that panel is showing, otherwise a plain gutter. Clamped to the live
+  // map size so narrow viewports (where panels span full width) can't ask for
+  // padding wider than the map, which MapLibre rejects.
+  const framePadding = useCallback(
+    (sides: { left?: boolean; right?: boolean; top?: boolean }) => {
+      const pad = {
+        top: sides.top ? 224 : MAP_GUTTER, // top-center search bar
+        bottom: MAP_GUTTER,
+        left: sides.left ? 452 : MAP_GUTTER, // 26rem results panel + offset + breathing room
+        right: sides.right ? 420 : MAP_GUTTER, // 24rem detail panel + offset + breathing room
+      };
+      const container = mapRef.current?.getContainer?.();
+      if (container) {
+        const maxX = Math.max(MAP_GUTTER, (container.clientWidth - 96) / 2);
+        const maxY = Math.max(MAP_GUTTER, (container.clientHeight - 96) / 2);
+        pad.left = Math.min(pad.left, maxX);
+        pad.right = Math.min(pad.right, maxX);
+        pad.top = Math.min(pad.top, maxY);
+        pad.bottom = Math.min(pad.bottom, maxY);
+      }
+      return pad;
+    },
+    [],
+  );
+
+  // Frame all routes once, when both the map and the route data are ready. This
+  // preserves the old remount's fit-to-all (instant, `duration: 0`) while the
+  // ref-based camera handles everything after. `maxZoom: 10` mirrors the old
+  // `fitZoom` cap so a tight corpus doesn't over-zoom the initial view.
+  useEffect(() => {
+    if (didInitialFitRef.current || !mapLoaded || routes.features.length === 0) {
+      return;
+    }
+    focusBounds(fitBoundsFromFeatures(routes), { duration: 0, maxZoom: 10 });
+    didInitialFitRef.current = true;
+  }, [mapLoaded, routes, focusBounds]);
+
+  // --- Search-driven view state. The plan's §4 three flags, tracked separately
+  // so the panel can host its loading / error states while `results` is null. ---
+  const panelOpen =
+    search.isLoading || search.results !== null || search.error !== null;
+  // While results exist, the id-membership filter supersedes the FilterBar (D3);
+  // otherwise the FilterBar's filter rules. Both layers share this expression.
+  const layerFilter =
+    search.results !== null
+      ? buildIdFilter(search.results.map((r) => String(r.id)))
+      : buildFilter(filterState);
+  // Ids of every route with geometry on the map; a result is "mappable" iff its
+  // id is in this set (search can return metadata-only routes — D6).
+  const loadedRouteIds = useMemo(
+    () => new Set(routes.features.map((f) => String(f.properties.id))),
+    [routes],
+  );
+
+  // When results arrive, frame the union of the mappable result geometries —
+  // the filtered-in routes are otherwise off-screen and hover-highlight has
+  // nothing visible to act on (plan §5.3). Mark as fitted only on a successful
+  // fit, so a results-before-routes ordering still fits once the corpus loads;
+  // skip entirely when nothing is mappable.
+  const fittedResultsRef = useRef<RouteSearchResult[] | null>(null);
+  useEffect(() => {
+    if (search.results === fittedResultsRef.current) return;
+    if (search.results === null) {
+      fittedResultsRef.current = null;
+      return;
+    }
+    const ids = new Set(search.results.map((r) => String(r.id)));
+    const mappable = routes.features.filter((f) =>
+      ids.has(String(f.properties.id)),
+    );
+    if (mappable.length === 0) return;
+    fittedResultsRef.current = search.results;
+    // Results panel (left) and search bar (top) are open here; reserve their space.
+    focusBounds(fitBoundsFromFeatures({ type: 'FeatureCollection', features: mappable }), {
+      padding: framePadding({ left: true, top: true }),
+    });
+  }, [search.results, routes, focusBounds, framePadding]);
+
   const clearSelection = () => {
     const next = new URLSearchParams(searchParams);
     next.delete('route');
     setSearchParams(next);
   };
 
-  const selectRoute = (id: number) => {
+  const selectRoute = (id: string | number) => {
     const next = new URLSearchParams(searchParams);
     next.set('route', String(id));
     setSearchParams(next);
   };
 
+  // Click a mappable result card → animate to frame it + open its detail panel
+  // (D5). The null guard is belt-and-braces: no-geometry cards aren't clickable.
+  const handleSelectResult = (id: string) => {
+    const bounds = boundsForRouteId(routes, id);
+    if (bounds === null) return;
+    // Selecting frames one route with the results panel (left) open and the
+    // detail panel (right) about to open, under the top search bar — reserve
+    // all three so the route stays clear of every floating panel.
+    focusBounds(bounds, { padding: framePadding({ left: true, right: true, top: true }) });
+    selectRoute(id);
+  };
+
+  // Close the panel → clear the search and the hover, restoring the FilterBar,
+  // every path, and the full filter (D8), and return focus to the search field.
+  const handleCloseSearch = () => {
+    search.clear();
+    setHoveredId(null);
+    searchFieldRef.current?.querySelector('textarea')?.focus();
+  };
+
+  // Esc closes the panel from anywhere. A "latest ref" keeps the listener stable
+  // so it subscribes once per open/close, not on every keystroke, while always
+  // calling the current close handler.
+  const closeSearchRef = useRef(handleCloseSearch);
+  useEffect(() => {
+    closeSearchRef.current = handleCloseSearch;
+  });
+  useEffect(() => {
+    if (!panelOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeSearchRef.current();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [panelOpen]);
+
   return (
     <main className="relative h-[calc(100vh-4rem)] w-full overflow-hidden bg-[var(--color-forest)]">
-      <div className="map-panel absolute left-3 top-3 z-10 w-[min(27rem,calc(100vw-1.5rem))] rounded-lg border border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] p-3 shadow-[0_20px_55px_rgba(16,20,15,0.42)] backdrop-blur-md">
+      {/* Floating natural-language search — top-center, always reachable
+          (z-40 keeps it above both side panels on every breakpoint). */}
+      <div
+        ref={searchFieldRef}
+        role="search"
+        aria-label="Search routes"
+        className="absolute left-1/2 top-3 z-40 w-[min(32rem,calc(100vw-1.5rem))] -translate-x-1/2"
+      >
+        <SearchBar
+          query={search.query}
+          onQueryChange={search.setQuery}
+          onGenerate={() => search.search(search.query)}
+          isLoading={search.isLoading}
+        />
+      </div>
+
+      {panelOpen && (
+        <SearchResultsPanel
+          results={search.results}
+          mappableIds={loadedRouteIds}
+          selectedId={routeParam}
+          filtersRelaxed={search.filtersRelaxed}
+          isLoading={search.isLoading}
+          error={search.error}
+          onHover={setHoveredId}
+          onSelect={handleSelectResult}
+          onClose={handleCloseSearch}
+        />
+      )}
+
+      {/* FilterBar / Legend — hidden while the search panel is open (D1). */}
+      {!panelOpen && (
+      <div className="map-panel absolute left-3 top-48 z-10 w-[min(27rem,calc(100vw-1.5rem))] rounded-lg border border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] p-3 shadow-[0_20px_55px_rgba(16,20,15,0.42)] backdrop-blur-md">
         <FilterBar
           value={filterState}
           colorMode={colorMode}
@@ -256,18 +458,20 @@ export default function MapExplorer() {
           )}
         </div>
       </div>
+      )}
 
       {routeDetail !== null && (
-        <div className="absolute inset-x-3 bottom-3 z-20 sm:inset-x-auto sm:bottom-auto sm:right-3 sm:top-3 sm:w-96 sm:max-w-[36vw]">
+        <div className="absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-auto sm:right-3 sm:top-48 sm:w-96 sm:max-w-[36vw]">
           <RouteDetailPanel route={routeDetail} onClose={clearSelection} />
         </div>
       )}
 
       <Map
-        key={`${view.longitude}:${view.latitude}:${view.zoom}`}
+        ref={mapRef}
         initialViewState={view}
         mapStyle={CARTO_DARK_MATTER}
         interactiveLayerIds={['routes']}
+        onLoad={() => setMapLoaded(true)}
         onClick={(event) => {
           const feature = event.features?.[0];
           const id = feature?.properties?.id;
@@ -300,20 +504,24 @@ export default function MapExplorer() {
             type="line"
             paint={{
               'line-color': '#223020',
-              'line-opacity': 0.72,
+              'line-opacity': routeOpacityExpression(
+                hoveredId,
+                CASING_FULL_OPACITY,
+                CASING_DIM_OPACITY,
+              ),
               'line-width': 6,
             }}
-            filter={buildFilter(filterState)}
+            filter={layerFilter}
           />
           <Layer
             id="routes"
             type="line"
             paint={{
               'line-color': lineColorFor(colorMode),
-              'line-opacity': 0.95,
+              'line-opacity': routeOpacityExpression(hoveredId),
               'line-width': 3,
             }}
-            filter={buildFilter(filterState)}
+            filter={layerFilter}
           />
         </Source>
       </Map>

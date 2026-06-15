@@ -17,6 +17,7 @@ export default function SearchBar({ query, onQueryChange, onGenerate, isLoading 
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') onGenerate();
           }}
+          aria-label="Describe the route you're looking for"
           placeholder="Find me a 20-mile gravel loop with a coffee shop stop and scenic ridge views..."
           rows={3}
           className="w-full resize-none rounded-xl bg-transparent px-4 pb-2 pt-4 text-base text-zinc-100 placeholder-zinc-600 focus:outline-none"

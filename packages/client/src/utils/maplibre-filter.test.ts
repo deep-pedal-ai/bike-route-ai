@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { buildFilter } from './maplibre-filter';
+import { buildFilter, buildIdFilter } from './maplibre-filter';
 
 import type { FilterState } from './maplibre-filter';
 import type { CorpusRouteProps } from '@bike-route-ai/shared';
@@ -19,6 +19,8 @@ function evaluate(expr: Expr, props: Record<string, unknown>): unknown {
   switch (op) {
     case 'get':
       return props[args[0] as string];
+    case 'to-string':
+      return String(evaluate(args[0], props));
     case 'all':
       return args.every((a) => evaluate(a, props) === true);
     case 'any':
@@ -124,6 +126,35 @@ describe('buildFilter — minQuality', () => {
 
   it('does not constrain quality when minQuality is unset', () => {
     expect(keeps({ sources: [] }, { ...base, quality_score: null })).toBe(true);
+  });
+});
+
+describe('buildIdFilter — the id-normalization landmine', () => {
+  // The map layer stores `properties.id` as a NUMBER (corpus fixtures: 4, 286);
+  // search results carry `id` as a STRING. The filter must normalize both sides
+  // to string or it silently matches nothing. These tests assert exactly that.
+  function matches(ids: string[], idProp: number | string): boolean {
+    return evaluate(buildIdFilter(ids), { id: idProp }) === true;
+  }
+
+  it('matches nothing for an empty id list', () => {
+    expect(matches([], 4)).toBe(false);
+    expect(matches([], '4')).toBe(false);
+  });
+
+  it('matches a numeric feature id against a string membership id', () => {
+    expect(matches(['4', '286'], 4)).toBe(true);
+    expect(matches(['4', '286'], 286)).toBe(true);
+  });
+
+  it('matches a string feature id too (both sides normalized to string)', () => {
+    expect(matches(['4', '286'], '4')).toBe(true);
+    expect(matches(['4', '286'], '286')).toBe(true);
+  });
+
+  it('drops a feature whose id is not in the membership list', () => {
+    expect(matches(['4', '286'], 999)).toBe(false);
+    expect(matches(['4', '286'], '999')).toBe(false);
   });
 });
 

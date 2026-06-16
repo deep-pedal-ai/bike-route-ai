@@ -7,7 +7,10 @@ SQL filters or proper-name search concerns, not semantic riding-experience text.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
+
+from freewheel_corpus.poi.taxonomy import Bucket
 
 PAVED_SURFACES = {
     "paved",
@@ -39,8 +42,19 @@ def build_route_description(
     surface_breakdown: dict[str, float] | None,
     protected_lane_fraction: float | None,
     greenway_fraction: float | None,
+    poi_summary: Mapping[Bucket, int] | None = None,
 ) -> str:
-    """Build the stored text that Phase 5 embeds for one route."""
+    """Build the stored text that Phase 5 embeds for one route.
+
+    ``poi_summary`` is a category-level count of the SELECTED/capped POIs near
+    the route (``{Bucket: count}``) — never raw names/coords/images, which stay
+    in the ``pois`` table for display only (feature §7). When present and
+    non-empty it appends ONE bounded, experiential category clause in the
+    corpus's existing register (e.g. "…with several coffee stops, a scenic
+    overlook, and a historic landmark along the way."). When unset/``None``/
+    empty the output is **byte-identical** to the pre-POI behaviour, so the
+    idempotent p5 re-embed does not spuriously re-embed unchanged rows.
+    """
     clauses: list[str] = []
 
     terrain = _terrain_phrase(distance_km=distance_km, ascent_m=ascent_m)
@@ -50,7 +64,59 @@ def build_route_description(
     clauses.append(_surface_phrase(surface_breakdown))
     clauses.append(_protection_phrase(protected_lane_fraction, greenway_fraction))
 
-    return "A " + ", ".join(clauses) + "."
+    base = "A " + ", ".join(clauses) + "."
+
+    poi_clause = _poi_phrase(poi_summary)
+    if poi_clause:
+        return base[:-1] + ", " + poi_clause + "."
+    return base
+
+
+# Experiential category words per bucket: (singular noun phrase, plural noun).
+# These are riding-experience words riders actually query ("coffee", "scenic",
+# "historic") — never proper nouns. Order of this mapping is the deterministic
+# clause order (iterated by Bucket enum order below).
+_BUCKET_WORDS: dict[Bucket, tuple[str, str]] = {
+    Bucket.COFFEE_FOOD: ("a coffee stop", "coffee stops"),
+    Bucket.WATER_REST: ("a rest stop", "rest stops"),
+    Bucket.SCENIC: ("a scenic overlook", "scenic overlooks"),
+    Bucket.LANDMARK: ("a historic landmark", "historic landmarks"),
+    Bucket.BIKE_SERVICES: ("a bike-service stop", "bike-service stops"),
+}
+
+
+def _poi_phrase(poi_summary: Mapping[Bucket, int] | None) -> str | None:
+    """One bounded experiential clause from a bucket->count summary, or None.
+
+    Deterministic: iterates the fixed ``Bucket`` enum order (not dict order) and
+    pluralizes by count ("a coffee stop" vs "several coffee stops"). Buckets with
+    a non-positive / missing count are omitted. Only category words appear — no
+    names, no coordinates, no counts as digits.
+    """
+    if not poi_summary:
+        return None
+
+    parts: list[str] = []
+    for bucket in Bucket:  # fixed enum order => deterministic output
+        count = poi_summary.get(bucket, 0)
+        if count <= 0:
+            continue
+        singular, plural = _BUCKET_WORDS[bucket]
+        parts.append("several " + plural if count > 1 else singular)
+
+    if not parts:
+        return None
+
+    return "with " + _join_clause(parts) + " along the way"
+
+
+def _join_clause(parts: list[str]) -> str:
+    """Join phrases as an English list: "a", "a and b", "a, b, and c"."""
+    if len(parts) == 1:
+        return parts[0]
+    if len(parts) == 2:
+        return parts[0] + " and " + parts[1]
+    return ", ".join(parts[:-1]) + ", and " + parts[-1]
 
 
 def _terrain_phrase(*, distance_km: float | None, ascent_m: float | None) -> str | None:

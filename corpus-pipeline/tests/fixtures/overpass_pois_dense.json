@@ -1,0 +1,255 @@
+{
+  "version": 0.6,
+  "generator": "synthetic POI fixture (dense urban, S3)",
+  "elements": [
+    {
+      "type": "node",
+      "id": 1001,
+      "lat": 40.780451,
+      "lon": -73.967993,
+      "tags": {
+        "amenity": "cafe",
+        "name": "Cafe A",
+        "wikidata": "Q100"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1002,
+      "lat": 40.780541,
+      "lon": -73.963992,
+      "tags": {
+        "amenity": "cafe",
+        "name": "Cafe B"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1003,
+      "lat": 40.780361,
+      "lon": -73.959994,
+      "tags": {
+        "amenity": "cafe"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1004,
+      "lat": 40.780631,
+      "lon": -73.95599,
+      "tags": {
+        "amenity": "cafe",
+        "name": "Cafe D",
+        "wikidata": "Q101"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1005,
+      "lat": 40.78027,
+      "lon": -73.951996,
+      "tags": {
+        "amenity": "cafe",
+        "name": "Cafe E"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1006,
+      "lat": 40.780496,
+      "lon": -73.958992,
+      "tags": {
+        "amenity": "cafe"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1007,
+      "lat": 40.782703,
+      "lon": -73.959958,
+      "tags": {
+        "amenity": "cafe",
+        "name": "Far Cafe"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1008,
+      "lat": 40.780361,
+      "lon": -73.966994,
+      "tags": {
+        "amenity": "drinking_water"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1009,
+      "lat": 40.78037,
+      "lon": -73.962994,
+      "tags": {
+        "amenity": "drinking_water"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1010,
+      "lat": 40.780379,
+      "lon": -73.958994,
+      "tags": {
+        "amenity": "drinking_water"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1011,
+      "lat": 40.780388,
+      "lon": -73.954994,
+      "tags": {
+        "amenity": "drinking_water"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1012,
+      "lat": 40.780396,
+      "lon": -73.950994,
+      "tags": {
+        "amenity": "drinking_water"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1013,
+      "lat": 40.780406,
+      "lon": -73.960994,
+      "tags": {
+        "amenity": "drinking_water"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1014,
+      "lat": 40.782703,
+      "lon": -73.959958,
+      "tags": {
+        "tourism": "viewpoint",
+        "name": "Overlook North"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1015,
+      "lat": 40.781081,
+      "lon": -73.964983,
+      "tags": {
+        "tourism": "viewpoint"
+      }
+    },
+    {
+      "type": "way",
+      "id": 1016,
+      "center": {
+        "lat": 40.781802,
+        "lon": -73.956972
+      },
+      "tags": {
+        "natural": "peak",
+        "name": "Vista Hill",
+        "wikidata": "Q200"
+      }
+    },
+    {
+      "type": "way",
+      "id": 1017,
+      "center": {
+        "lat": 40.781802,
+        "lon": -73.965972
+      },
+      "tags": {
+        "historic": "monument",
+        "name": "Monument 0",
+        "wikidata": "Q300"
+      }
+    },
+    {
+      "type": "way",
+      "id": 1018,
+      "center": {
+        "lat": 40.781622,
+        "lon": -73.961975
+      },
+      "tags": {
+        "historic": "monument",
+        "name": "Monument 1",
+        "wikidata": "Q301"
+      }
+    },
+    {
+      "type": "way",
+      "id": 1019,
+      "center": {
+        "lat": 40.781982,
+        "lon": -73.957969
+      },
+      "tags": {
+        "historic": "monument",
+        "name": "Monument 2"
+      }
+    },
+    {
+      "type": "way",
+      "id": 1020,
+      "center": {
+        "lat": 40.782252,
+        "lon": -73.953965
+      },
+      "tags": {
+        "historic": "monument",
+        "name": "Monument 3",
+        "wikidata": "Q303"
+      }
+    },
+    {
+      "type": "way",
+      "id": 1021,
+      "center": {
+        "lat": 40.783153,
+        "lon": -73.959951
+      },
+      "tags": {
+        "historic": "monument",
+        "name": "Monument 4",
+        "wikidata": "Q304"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1022,
+      "lat": 40.782162,
+      "lon": -73.962966,
+      "tags": {
+        "historic": "memorial"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1023,
+      "lat": 40.780541,
+      "lon": -73.959992,
+      "tags": {
+        "amenity": "bicycle_repair_station",
+        "name": "Repair Stand"
+      }
+    },
+    {
+      "type": "node",
+      "id": 1024,
+      "lat": 40.780811,
+      "lon": -73.953987,
+      "tags": {
+        "shop": "bicycle",
+        "name": "Bike Shop"
+      }
+    }
+  ]
+}

@@ -19,6 +19,12 @@ from collections.abc import Callable
 from typing import Any
 
 import httpx
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from freewheel_corpus.cache import DiskCache
 
@@ -30,12 +36,36 @@ DEFAULT_USER_AGENT = "freewheel-corpus/0.1 (bike-route-ai; +https://github.com/d
 
 _CACHE_CLIENT = "overpass"
 
+# The public Overpass endpoint intermittently returns these under load — most
+# commonly 504 Gateway Timeout. They're transient: a backed-off retry usually
+# lands on a healthy backend. Other 4xx (e.g. 400 bad query) are NOT retried.
+_TRANSIENT_STATUSES = frozenset({429, 502, 503, 504})
+_RETRY_ATTEMPTS = 4
+
 Transport = Callable[[str], Any]
 
 
-def _http_transport(base_url: str, timeout: float) -> Transport:
-    """Build the default HTTP transport: POST the query as ``data=`` form body."""
+def _is_transient_error(exc: BaseException) -> bool:
+    """True for retryable Overpass failures: transient 5xx/429 or transport errors."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _TRANSIENT_STATUSES
+    return isinstance(exc, httpx.TransportError)  # timeouts, connection resets
 
+
+def _http_transport(base_url: str, timeout: float) -> Transport:
+    """Build the default HTTP transport: POST the query as ``data=`` form body.
+
+    Retries transient endpoint failures (504 et al.) with exponential backoff
+    (~5s, 10s, 20s over 4 attempts); after exhausting them the last error is
+    re-raised so the caller (p6) logs the route and moves on.
+    """
+
+    @retry(
+        retry=retry_if_exception(_is_transient_error),
+        stop=stop_after_attempt(_RETRY_ATTEMPTS),
+        wait=wait_exponential(multiplier=5, min=5, max=60),
+        reraise=True,
+    )
     def _post(query: str) -> Any:
         body = urllib.parse.urlencode({"data": query})
         resp = httpx.post(

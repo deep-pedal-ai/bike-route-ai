@@ -41,9 +41,22 @@ class FakeOverpass:
         return {"elements": self._elements}
 
 
+_CAFE_WITH_WIKIDATA = {
+    "type": "node",
+    "id": 222,
+    "lat": 40.7805,
+    "lon": -73.965,
+    "tags": {"amenity": "cafe", "name": "Wiki Café", "wikidata": "Q123"},
+}
+
+
 class FailingOverpass:
     def query(self, _ql: str, **_kw) -> dict:
         raise RuntimeError("overpass timeout")
+
+
+def _failing_image_transport(_url: str) -> dict:
+    raise RuntimeError("wikimedia unreachable")
 
 
 def _seed_route(conn) -> int:
@@ -148,6 +161,27 @@ def test_p6_logs_error_on_overpass_failure_without_crashing(clean_db):
             (route_id,),
         )
         assert cur.fetchone()[0] == "error"
+
+
+def test_p6_survives_wikimedia_failure_storing_icon_only_poi(clean_db):
+    """A Wikimedia outage during image resolution must NOT abort the route — the
+    POI is still stored (icon-only, image_url NULL), not lost or logged as error."""
+    _migrate(clean_db)
+    _seed_route(clean_db)
+
+    stats = p6.run_p6(
+        clean_db,
+        overpass_client=FakeOverpass([_CAFE_WITH_WIKIDATA]),
+        image_transport=_failing_image_transport,
+        now=lambda: _FIXED_NOW,
+    )
+
+    assert stats.routes_with_pois == 1
+    assert stats.errors == 0
+    with clean_db.cursor() as cur:
+        cur.execute("SELECT name, image_url FROM pois WHERE wikidata_id = 'Q123'")
+        row = cur.fetchone()
+    assert row == ("Wiki Café", None)  # image hop failed -> icon-only, route kept
 
 
 def test_freshness_window_uses_config_days():

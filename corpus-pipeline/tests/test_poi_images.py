@@ -17,6 +17,16 @@ from freewheel_corpus.poi.images import resolve_image
 _FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def test_resolve_image_is_non_throwing_when_a_transport_hop_fails():
+    """A Wikimedia/Wikidata network failure degrades to no-image (None), never
+    raises — otherwise one flaky hop would abort the whole p6 batch."""
+
+    def boom(_url: str) -> dict:
+        raise RuntimeError("wikimedia unreachable")
+
+    assert resolve_image("Q42", transport=boom) is None
+
+
 def _load(name: str) -> dict:
     return json.loads((_FIXTURES / name).read_text())
 

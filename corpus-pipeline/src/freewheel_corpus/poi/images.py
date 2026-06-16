@@ -113,9 +113,17 @@ def resolve_image(
 
 
 def _fetch_p18_filename(qid: str, fetch: Transport) -> str | None:
-    """Pull the ``P18`` Commons filename from the Wikidata entity, or ``None``."""
+    """Pull the ``P18`` Commons filename from the Wikidata entity, or ``None``.
+
+    Non-throwing: a network failure on this hop is treated as "no image" (the
+    common case per §2a), so a Wikimedia hiccup degrades one POI to icon-only
+    rather than aborting the whole p6 batch.
+    """
     url = _WIKIDATA_ENTITY_URL.format(qid=urllib.parse.quote(qid))
-    payload = fetch(url)
+    try:
+        payload = fetch(url)
+    except Exception:  # noqa: BLE001 — image resolution is best-effort, never fatal
+        return None
     entity = payload.get("entities", {}).get(qid)
     if not entity:
         return None

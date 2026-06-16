@@ -135,37 +135,35 @@ def run_p6(
             stats.skipped_fresh += 1
             continue
 
+        # The whole per-route unit of work — select, image-resolve, upsert, log —
+        # is guarded so ONE bad route logs an error and the batch continues (§10).
+        # (Image resolution is also non-throwing, so a Wikimedia miss only drops
+        # that POI's photo, not the route.)
         try:
             route_geom = shape(json.loads(geom_geojson))
             selected = select_pois(
                 route_geom, elements_or_client=overpass_client, cfg=cfg
             )
+
+            if not selected:
+                _log(conn, "zero_pois", route_id, {"selected": 0}, None)
+                conn.commit()
+                stats.zero_pois += 1
+                continue
+
+            for poi in selected:
+                _upsert_poi_and_link(conn, route_id, poi, image_transport, current_time)
+
+            _log(conn, "success", route_id, {"selected": len(selected)}, None)
+            conn.commit()
+            stats.routes_with_pois += 1
+            stats.pois_upserted += len(selected)
         except Exception as exc:  # noqa: BLE001 — one bad route must not abort the run
             conn.rollback()
-            _log(
-                conn,
-                "error",
-                route_id,
-                {"error": type(exc).__name__},
-                str(exc),
-            )
+            _log(conn, "error", route_id, {"error": type(exc).__name__}, str(exc))
             conn.commit()
             stats.errors += 1
             continue
-
-        if not selected:
-            _log(conn, "zero_pois", route_id, {"selected": 0}, None)
-            conn.commit()
-            stats.zero_pois += 1
-            continue
-
-        for poi in selected:
-            _upsert_poi_and_link(conn, route_id, poi, image_transport, current_time)
-            stats.pois_upserted += 1
-
-        _log(conn, "success", route_id, {"selected": len(selected)}, None)
-        conn.commit()
-        stats.routes_with_pois += 1
 
     return stats
 

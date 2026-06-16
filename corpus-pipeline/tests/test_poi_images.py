@@ -27,6 +27,36 @@ def test_resolve_image_is_non_throwing_when_a_transport_hop_fails():
     assert resolve_image("Q42", transport=boom) is None
 
 
+def test_attribution_html_is_stripped_to_plain_text():
+    """Commons returns the Artist as HTML; we store/display clean plain text."""
+
+    def transport(url: str) -> dict:
+        if "EntityData" in url:
+            return {
+                "entities": {
+                    "Q1": {"claims": {"P18": [
+                        {"mainsnak": {"datavalue": {"value": "Foo.jpg"}}}
+                    ]}}
+                }
+            }
+        return {
+            "query": {"pages": {"1": {"imageinfo": [{"extmetadata": {
+                "LicenseShortName": {"value": "CC BY-SA 2.0"},
+                "Artist": {"value": (
+                    '<a rel="nofollow" class="external text" '
+                    'href="https://example.com/u/jane">Jane&nbsp;Doe</a>'
+                )},
+            }}]}}}
+        }
+
+    img = resolve_image("Q1", transport=transport)
+
+    assert img is not None
+    assert img.license == "CC BY-SA 2.0"
+    assert img.attribution == "Jane Doe"  # tags dropped, &nbsp; unescaped
+    assert "<" not in img.attribution and "href" not in img.attribution
+
+
 def _load(name: str) -> dict:
     return json.loads((_FIXTURES / name).read_text())
 

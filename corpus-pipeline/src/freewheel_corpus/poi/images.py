@@ -17,6 +17,8 @@ mockable; tests dispatch on the URL. The default transport uses ``httpx``.
 
 from __future__ import annotations
 
+import html
+import re
 import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -156,8 +158,11 @@ def _fetch_license_attribution(
         if not infos:
             continue
         extmeta = infos[0].get("extmetadata", {})
-        license_name = _extmeta_value(extmeta, "LicenseShortName")
-        attribution = _extmeta_value(extmeta, "Artist")
+        # The Commons `Artist` field is frequently HTML (e.g.
+        # `<a href="…">Jane Doe</a>`); we store plain text so the attribution
+        # renders as a name, not raw markup, in the detail panel.
+        license_name = _strip_html(_extmeta_value(extmeta, "LicenseShortName"))
+        attribution = _strip_html(_extmeta_value(extmeta, "Artist"))
         return license_name, attribution
     return None, None
 
@@ -168,3 +173,19 @@ def _extmeta_value(extmeta: dict, key: str) -> str | None:
         value = entry.get("value")
         return value if isinstance(value, str) else None
     return None
+
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _strip_html(value: str | None) -> str | None:
+    """Reduce a possibly-HTML Wikimedia metadata value to clean plain text.
+
+    Drops tags, unescapes entities, and collapses whitespace. Returns ``None``
+    if nothing meaningful remains (so an empty/markup-only value stays null).
+    """
+    if value is None:
+        return None
+    text = html.unescape(_TAG_RE.sub("", value))
+    text = " ".join(text.split())
+    return text or None

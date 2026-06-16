@@ -1,6 +1,31 @@
+import { Coffee, Droplets, Mountain, Landmark, Bike } from 'lucide-react';
+
 import { CORPUS_FIELD_DOCS } from '../corpus-field-docs';
+import { poiColor } from '../utils/poi-color';
 import type { Feature, LineString } from 'geojson';
-import type { CorpusRouteDetailProps } from '@bike-route-ai/shared';
+import type {
+  CorpusRouteDetailProps,
+  PoiBucket,
+  PoiSummary,
+} from '@bike-route-ai/shared';
+import type { LucideIcon } from 'lucide-react';
+
+// Per-bucket icon + label. The icon system (colour from poiColor + shape here)
+// carries the visual richness since most POIs have no image (feature doc §2a).
+// Ordered list keeps the grouped sections stable and matches the map layer.
+const POI_BUCKET_META: { bucket: PoiBucket; label: string; Icon: LucideIcon }[] = [
+  { bucket: 'coffee_food', label: 'Coffee & food', Icon: Coffee },
+  { bucket: 'water_rest', label: 'Water & rest', Icon: Droplets },
+  { bucket: 'scenic', label: 'Scenic', Icon: Mountain },
+  { bucket: 'landmark', label: 'Landmark', Icon: Landmark },
+  { bucket: 'bike_services', label: 'Bike services', Icon: Bike },
+];
+
+// Google Maps deep-link, derived from geometry — never stored (feature doc §5).
+// query is LAT,LNG (the reverse of GeoJSON's [lng,lat] geometry order).
+function googleMapsHref(poi: PoiSummary): string {
+  return `https://www.google.com/maps/search/?api=1&query=${poi.lat},${poi.lng}`;
+}
 
 type RouteDetailPanelProps = {
   route: Feature<LineString, CorpusRouteDetailProps> | null;
@@ -145,6 +170,83 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
           ))}
         </div>
       </section>
+
+      {p.pois !== undefined && p.pois.length > 0 && (
+        <section data-testid="poi-section" className="space-y-3">
+          <h3
+            title={CORPUS_FIELD_DOCS.pois}
+            className="text-xs text-[var(--color-sage-text)]"
+          >
+            Nearby
+          </h3>
+          {POI_BUCKET_META.map(({ bucket, label, Icon }) => {
+            const inBucket = p.pois!.filter((poi) => poi.bucket === bucket);
+            if (inBucket.length === 0) {
+              return null;
+            }
+            const color = poiColor(bucket);
+            return (
+              <div key={bucket} className="space-y-1.5">
+                <h4 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase text-[var(--color-moss-muted)]">
+                  <Icon className="h-3.5 w-3.5" style={{ color }} aria-hidden="true" />
+                  {label}
+                </h4>
+                <ul className="space-y-1.5">
+                  {inBucket.map((poi) => (
+                    <li
+                      key={poi.id}
+                      className="rounded border border-[var(--color-bark-border)] bg-[var(--color-bark-soft)] p-2"
+                    >
+                      <div className="flex items-start gap-2">
+                        <span
+                          aria-hidden="true"
+                          className="mt-0.5 inline-flex h-5 w-5 flex-none items-center justify-center rounded-full"
+                          style={{ backgroundColor: color }}
+                        >
+                          <Icon className="h-3 w-3 text-[var(--color-cream)]" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="truncate text-sm text-[var(--color-cream)]">
+                              {poi.name ?? 'Unnamed'}
+                            </span>
+                            <span className="flex-none font-mono text-xs text-[var(--color-sage-text)]">
+                              {Math.round(poi.distance_m)} m
+                            </span>
+                          </div>
+                          {poi.image_url !== null && (
+                            <figure className="mt-1.5 space-y-1">
+                              <img
+                                src={poi.image_url}
+                                alt={poi.name ?? 'Point of interest'}
+                                loading="lazy"
+                                className="h-24 w-full rounded object-cover"
+                              />
+                              {poi.image_attribution !== null && (
+                                <figcaption className="text-[10px] leading-snug text-[var(--color-moss-muted)]">
+                                  {poi.image_attribution}
+                                </figcaption>
+                              )}
+                            </figure>
+                          )}
+                          <a
+                            href={googleMapsHref(poi)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 inline-block text-xs text-[var(--color-leaf)] underline-offset-2 hover:underline"
+                          >
+                            View on Google Maps
+                          </a>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {p.attribution !== null && (
         <p

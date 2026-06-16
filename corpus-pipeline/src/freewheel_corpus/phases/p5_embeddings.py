@@ -15,6 +15,7 @@ import psycopg
 from freewheel_corpus import migrations
 from freewheel_corpus.description import build_route_description
 from freewheel_corpus.embedder import Embedder, vector_literal
+from freewheel_corpus.poi.taxonomy import Bucket
 
 PHASE = "phase5"
 
@@ -49,6 +50,15 @@ FROM routes
 ORDER BY id
 """
 
+# POI category-summary fold (feature §7): the count of SELECTED POIs per route
+# per bucket. Empty before phase p6 has run — so build_route_description gets no
+# poi_summary and produces the byte-identical pre-POI text (no spurious re-embed).
+_POI_SUMMARY_SQL = """
+SELECT route_id, matched_bucket, count(*)::int
+FROM route_pois
+GROUP BY route_id, matched_bucket
+"""
+
 _UPDATE_SQL = """
 UPDATE routes SET
     description = %(description)s,
@@ -70,6 +80,8 @@ def run(conn: psycopg.Connection, *, embedder: Embedder) -> Phase5Stats:
 
     stats = Phase5Stats(migrations_applied=migrations_applied, model_id=embedder.model_id)
 
+    poi_summaries = _poi_summaries_by_route(conn)
+
     with conn.cursor() as read_cur, conn.cursor() as write_cur:
         read_cur.execute(_ROUTES_SQL)
         for row in read_cur.fetchall():
@@ -82,6 +94,7 @@ def run(conn: psycopg.Connection, *, embedder: Embedder) -> Phase5Stats:
                 surface_breakdown=route["surface_breakdown"],
                 protected_lane_fraction=route["protected_lane_fraction"],
                 greenway_fraction=route["greenway_fraction"],
+                poi_summary=poi_summaries.get(route["id"]),
             )
 
             if (
@@ -127,6 +140,25 @@ def assert_no_mixed_embedding_models(conn: psycopg.Connection) -> None:
             "routes.embedding contains multiple embedding_model values: "
             + ", ".join(models)
         )
+
+
+def _poi_summaries_by_route(conn: psycopg.Connection) -> dict[int, dict[Bucket, int]]:
+    """Per-route ``{Bucket: count}`` of the selected POIs (feature §7 fold input).
+
+    Returns ``{}`` when ``route_pois`` is empty (the pre-p6 state), which makes
+    every description byte-identical to its pre-POI form — the idempotent re-embed
+    then skips every unchanged row. Unknown bucket slugs are ignored defensively.
+    """
+    summaries: dict[int, dict[Bucket, int]] = {}
+    with conn.cursor() as cur:
+        cur.execute(_POI_SUMMARY_SQL)
+        for route_id, raw_bucket, count in cur.fetchall():
+            try:
+                bucket = Bucket(raw_bucket)
+            except ValueError:
+                continue
+            summaries.setdefault(route_id, {})[bucket] = count
+    return summaries
 
 
 def _row_to_route(row: tuple[Any, ...]) -> dict[str, Any]:

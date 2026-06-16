@@ -8,13 +8,12 @@ export function createRouteSearchController(routeSearchService: RouteSearchServi
     async search(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const validation = validateSearchRequest(req.body);
-        if (!validation.ok) {
+        if (validation.ok) {
+          const response = await routeSearchService.search(validation.body.query);
+          res.json(response);
+        } else {
           next(new HttpError(400, validation.error));
-          return;
         }
-
-        const response = await routeSearchService.search(validation.body.query);
-        res.json(response);
       } catch (err) {
         next(err);
       }

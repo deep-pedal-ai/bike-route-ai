@@ -16,7 +16,11 @@ export function createRouteSearchService(
   return {
     async search(query: string): Promise<RouteSearchResponse> {
       const trimmedQuery = query.trim();
+      console.log(`Route search: query="${trimmedQuery}"`);
+
       const constraints = sanitizeConstraints(await aiClient.extractConstraints(trimmedQuery));
+      console.log('Route search: extracted constraints', constraints);
+
       const queryEmbedding = await aiClient.embedQuery(trimmedQuery);
 
       await dbClient.assertEmbeddingModel(EMBEDDING_MODEL_ID);
@@ -25,11 +29,13 @@ export function createRouteSearchService(
       let candidates = await dbClient.findNearestRoutes(queryEmbedding, constraints, 5);
 
       if (candidates.length === 0 && hasHardConstraints(constraints)) {
+        console.log('Route search: no results with constraints, retrying without filters');
         filtersRelaxed = true;
         candidates = await dbClient.findNearestRoutes(queryEmbedding, {}, 5);
       }
 
       if (candidates.length === 0) {
+        console.log('Route search: no candidates found, returning empty results');
         return { results: [], filtersRelaxed };
       }
 
@@ -44,6 +50,7 @@ export function createRouteSearchService(
         })
         .filter((result): result is RouteSearchResult => result !== null);
 
+      console.log(`Route search: returning ${results.length} result(s)`);
       return { results, filtersRelaxed };
     },
   };
@@ -86,7 +93,8 @@ async function getValidatedRankings(
   try {
     const rankings = await aiClient.rerank(query, candidates);
     return validateRankings(rankings, candidates);
-  } catch {
+  } catch (err) {
+    console.warn('Route search: rerank failed, falling back to default ranking:', err);
     return fallbackRankings(candidates);
   }
 }

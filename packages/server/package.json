@@ -14,12 +14,14 @@
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.1",
     "express": "^4.21.0",
+    "morgan": "^1.11.0",
     "openai": "^6.10.0",
     "pg": "^8.21.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/geojson": "^7946.0.16",
+    "@types/morgan": "^1.9.10",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^6.0.2",
     "@vitest/coverage-v8": "^2.1.9",

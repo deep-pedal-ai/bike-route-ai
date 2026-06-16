@@ -1,25 +1,28 @@
 // Route colour encoding. Categorical palette keyed by `source`, tuned toward
-// outdoor ride-planning cues: leaf, river, wildflower, and trail paint. Pure —
+// outdoor ride-planning cues: leaf, river, clay, and trail paint. Deepened and
+// saturated so each line holds its own on the CREAM Voyager basemap (the old
+// mid-tones — #86a85e leaf, #d8aa52 trail — washed out on light tiles). Pure —
 // no React, no MapLibre import.
 
 const SOURCE_COLORS: Record<string, string> = {
-  osm_relation: '#86a85e', // leaf — broad public route corpus
-  canon: '#4f9bb0', // river — curated routes
-  generated: '#d9865b', // clay — AI/generated routes
-  nysdot: '#d8aa52', // trail marker — agency routes
+  osm_relation: '#3f7d2f', // deep leaf — broad public route corpus
+  canon: '#1f7e98', // river teal — curated routes
+  generated: '#c4602b', // clay — AI/generated routes
+  nysdot: '#b5852a', // trail gold — agency routes
 };
 
-const DEFAULT_SOURCE_COLOR = '#969b8c'; // lichen stone — unknown / unmapped source
+const DEFAULT_SOURCE_COLOR: string = '#5c5f52'; // lichen stone — unknown / unmapped source
 
 export function colorBySource(source: string): string {
   return SOURCE_COLORS[source] ?? DEFAULT_SOURCE_COLOR;
 }
 
 // Sequential gradient for quality_score (0..1): muted soil at the low end,
-// living leaf at the high end. It should read as outdoorsy, not neon.
-const QUALITY_LOW = { r: 0x65, g: 0x67, b: 0x53 }; // olive soil
-const QUALITY_HIGH = { r: 0x86, g: 0xa8, b: 0x5e }; // leaf
-const QUALITY_NEUTRAL = '#666a5d'; // shaded stone — null / unscored
+// vivid leaf at the high end. Both endpoints are dark enough to read against
+// cream tiles while staying distinct from one another.
+const QUALITY_LOW = { r: 0x8a, g: 0x6a, b: 0x2a }; // dry earth / amber soil
+const QUALITY_HIGH = { r: 0x2f, g: 0x82, b: 0x33 }; // living leaf
+const QUALITY_NEUTRAL = '#5a5d50'; // shaded stone — null / unscored
 
 function toHex(channel: number): string {
   return channel.toString(16).padStart(2, '0');

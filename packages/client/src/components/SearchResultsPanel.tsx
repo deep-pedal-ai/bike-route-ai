@@ -79,8 +79,8 @@ export default function SearchResultsPanel({
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
         {error !== null ? (
-          <div className="flex items-start gap-2.5 rounded-lg border border-red-400/30 bg-red-400/10 p-3 text-xs leading-5 text-red-100">
-            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-300" />
+          <div className="flex items-start gap-2.5 rounded-lg border border-[var(--color-danger-border)] bg-[var(--color-danger-wash)] p-3 text-xs leading-5 text-[var(--color-danger)]">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-[var(--color-danger)]" />
             <p>{error}</p>
           </div>
         ) : isLoading ? (
@@ -98,8 +98,8 @@ export default function SearchResultsPanel({
         ) : results !== null ? (
           <>
             {filtersRelaxed && (
-              <div className="flex items-start gap-2.5 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">
-                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-300" />
+              <div className="flex items-start gap-2.5 rounded-lg border border-[var(--color-warning-border)] bg-[var(--color-warning-wash)] p-3 text-xs leading-5 text-[var(--color-warning)]">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-[var(--color-warning)]" />
                 <p>
                   No exact route satisfied those distance or loop filters. Closest corpus
                   routes are shown.

@@ -3,11 +3,17 @@ import { Map, Source, Layer } from 'react-map-gl/maplibre';
 import { useSearchParams } from 'react-router-dom';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
+import { SlidersHorizontal } from 'lucide-react';
+
 import FilterBar from '../components/FilterBar';
+import FilterSheet from '../components/FilterSheet';
 import Legend from '../components/Legend';
 import RouteDetailPanel from '../components/RouteDetailPanel';
 import SearchBar from '../components/SearchBar';
 import SearchResultsPanel from '../components/SearchResultsPanel';
+import SearchResultsDock from '../components/SearchResultsDock';
+import { useTheme } from '../theme/use-theme.js';
+import { useIsMobile } from '../hooks/use-is-mobile';
 import { useCorpusRoutes } from '../hooks/use-corpus-routes';
 import { useCorpusRoute } from '../hooks/use-corpus-route';
 import { useFacilities } from '../hooks/use-facilities';
@@ -52,6 +58,17 @@ const MAP_GUTTER = 64;
 
 const CARTO_DARK_MATTER =
   'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+
+// Light basemap: CARTO Voyager — fresh, cream-toned tiles for the default light
+// theme. Selected from the live theme so the basemap flips with the toggle.
+const CARTO_VOYAGER =
+  'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
+
+// Casing (halo) under each route line. Strava/Google convention: a dark halo on
+// dark tiles, a light/white halo on light tiles so the saturated line pops off
+// the cream Voyager basemap.
+const CASING_COLOR_DARK = '#223020';
+const CASING_COLOR_LIGHT = '#f5f6f1';
 
 const ATTRIBUTION =
   '© CARTO · © OpenStreetMap contributors, ODbL';
@@ -114,6 +131,81 @@ function facilityPaintExpression(): ExpressionSpecification {
   ] as unknown as ExpressionSpecification;
 }
 
+// --- SUBTLE cycling-tune of the light basemap. Voyager is already fresh, so
+// this only nudges: car-road layers fade toward a neutral gray / lower opacity
+// so they recede behind routes, while nature layers (parks, landcover/landuse,
+// water) lift a touch greener/bluer. Layer ids vary between basemap revisions,
+// so we walk the live style by id prefix and guard every paint write. Pure side
+// effect on the passed map; idempotent (re-running re-applies the same values),
+// so it's safe to call on every styledata event. ---
+
+// Layer-id prefixes we tune, grouped by the property write each group needs.
+const ROAD_PREFIXES = ['road_', 'bridge_', 'tunnel_'];
+const PARK_PREFIXES = ['park_', 'poi_park'];
+const GREEN_PREFIXES = ['landcover', 'landuse'];
+const WATER_PREFIXES = ['water', 'waterway'];
+
+type TunableMap = {
+  getStyle?: () => { layers?: Array<{ id?: string; type?: string }> } | undefined;
+  getLayer?: (id: string) => unknown;
+  setPaintProperty?: (id: string, prop: string, value: unknown) => void;
+};
+
+// Gently set a paint property, swallowing the throw MapLibre raises when a layer
+// id is absent or the property doesn't apply to that layer type.
+function nudgePaint(map: TunableMap, id: string, prop: string, value: unknown): void {
+  try {
+    if (typeof map.getLayer === 'function' && map.getLayer(id) === undefined) return;
+    map.setPaintProperty?.(id, prop, value);
+  } catch {
+    // Layer id varies / property not applicable — skip silently.
+  }
+}
+
+function startsWithAny(id: string, prefixes: string[]): boolean {
+  return prefixes.some((p) => id.startsWith(p));
+}
+
+function applyCyclingTune(map: TunableMap | null | undefined): void {
+  // Bail cleanly when handed the test's fake map (no getStyle) or a half-loaded
+  // GL map — this early return is what keeps the suite green.
+  if (!map || typeof map.getStyle !== 'function') return;
+  const style = map.getStyle();
+  const layers = style?.layers;
+  if (!Array.isArray(layers)) return;
+
+  for (const layer of layers) {
+    const id = layer?.id;
+    if (typeof id !== 'string') continue;
+
+    if (startsWithAny(id, ROAD_PREFIXES)) {
+      // Mute car roads: blend the fill toward neutral gray and dial opacity back
+      // a touch so routes sit clearly on top.
+      if (layer.type === 'line') {
+        nudgePaint(map, id, 'line-color', '#cfcdc6');
+        nudgePaint(map, id, 'line-opacity', 0.85);
+      } else if (layer.type === 'fill') {
+        nudgePaint(map, id, 'fill-color', '#dad8d1');
+        nudgePaint(map, id, 'fill-opacity', 0.85);
+      }
+    } else if (startsWithAny(id, PARK_PREFIXES) || startsWithAny(id, GREEN_PREFIXES)) {
+      // Lift nature a hair greener.
+      if (layer.type === 'fill') {
+        nudgePaint(map, id, 'fill-color', '#dce9cf');
+      } else if (layer.type === 'line') {
+        nudgePaint(map, id, 'line-color', '#cfe0bf');
+      }
+    } else if (startsWithAny(id, WATER_PREFIXES)) {
+      // Lift water a hair bluer.
+      if (layer.type === 'fill') {
+        nudgePaint(map, id, 'fill-color', '#cfe2ec');
+      } else if (layer.type === 'line') {
+        nudgePaint(map, id, 'line-color', '#bcd6e6');
+      }
+    }
+  }
+}
+
 function mercatorY(lat: number): number {
   const sin = Math.sin((lat * Math.PI) / 180);
   return 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI);
@@ -156,10 +248,13 @@ const FACILITY_SWATCHES = FACILITY_CLASSES.map((cls) => ({
 const QUALITY_GRADIENT = { from: colorByQuality(0), to: colorByQuality(1) };
 
 export default function MapExplorer() {
+  const { theme } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const [filterState, setFilterState] = useState<FilterState>({ sources: [] });
   const [colorMode, setColorMode] = useState<ColorMode>('source');
   const [overlayOn, setOverlayOn] = useState<boolean>(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState<boolean>(false);
+  const isMobile = useIsMobile();
 
   // Natural-language route search (shared with the Generate page). Id of the
   // result route the user is pointing at (string-normalized) drives the routes
@@ -237,13 +332,29 @@ export default function MapExplorer() {
   // padding wider than the map, which MapLibre rejects.
   const framePadding = useCallback(
     (sides: { left?: boolean; right?: boolean; top?: boolean }) => {
+      const container = mapRef.current?.getContainer?.();
+
+      // Mobile: the search bar floats at the top and the results dock sits at the
+      // bottom, so frame routes into the clear band between them. The left/right
+      // panel reservations don't apply — reserve top (search) and bottom (dock).
+      if (isMobile) {
+        const height = container?.clientHeight ?? 0;
+        const peek = Math.min(288, Math.max(168, height * 0.34));
+        const pad = { top: 132, bottom: peek + 24, left: MAP_GUTTER, right: MAP_GUTTER };
+        if (height > 0) {
+          const maxY = Math.max(MAP_GUTTER, (height - 96) / 2);
+          pad.top = Math.min(pad.top, maxY);
+          pad.bottom = Math.min(pad.bottom, maxY);
+        }
+        return pad;
+      }
+
       const pad = {
         top: sides.top ? 224 : MAP_GUTTER, // top-center search bar
         bottom: MAP_GUTTER,
         left: sides.left ? 452 : MAP_GUTTER, // 26rem results panel + offset + breathing room
         right: sides.right ? 420 : MAP_GUTTER, // 24rem detail panel + offset + breathing room
       };
-      const container = mapRef.current?.getContainer?.();
       if (container) {
         const maxX = Math.max(MAP_GUTTER, (container.clientWidth - 96) / 2);
         const maxY = Math.max(MAP_GUTTER, (container.clientHeight - 96) / 2);
@@ -254,7 +365,7 @@ export default function MapExplorer() {
       }
       return pad;
     },
-    [],
+    [isMobile],
   );
 
   // Frame all routes once, when both the map and the route data are ready. This
@@ -334,6 +445,19 @@ export default function MapExplorer() {
     selectRoute(id);
   };
 
+  // Scroll a card into focus in the mobile dock → zoom the map to that route
+  // (without opening its detail), so the camera follows whichever card covers
+  // most of the screen. Stable identity keeps the dock's scroll effect from
+  // re-firing every render. A short duration keeps the camera tracking the swipe.
+  const handleCenterResult = useCallback(
+    (id: string) => {
+      const bounds = boundsForRouteId(routes, id);
+      if (bounds === null) return;
+      focusBounds(bounds, { padding: framePadding({}), duration: 400 });
+    },
+    [routes, focusBounds, framePadding],
+  );
+
   // Close the panel → clear the search and the hover, restoring the FilterBar,
   // every path, and the full filter (D8), and return focus to the search field.
   const handleCloseSearch = () => {
@@ -358,8 +482,26 @@ export default function MapExplorer() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [panelOpen]);
 
+  // Basemap and casing flip with the theme. Voyager (cream) under light, Dark
+  // Matter under dark; react-map-gl re-runs setStyle when mapStyle changes.
+  const isLight = theme === 'light';
+  const mapStyle = isLight ? CARTO_VOYAGER : CARTO_DARK_MATTER;
+  const casingColor = isLight ? CASING_COLOR_LIGHT : CASING_COLOR_DARK;
+
+  // Apply the SUBTLE cycling-tune (light only) from the map event's target. Runs
+  // on first load AND on every styledata so a theme switch — which reloads the
+  // basemap async — re-tunes once the new style's layers exist. Guarded inside
+  // applyCyclingTune so the test's fake map (no getStyle) is a clean no-op.
+  const tuneFromEvent = useCallback(
+    (event: { target?: TunableMap }) => {
+      if (!isLight) return;
+      applyCyclingTune(event?.target);
+    },
+    [isLight],
+  );
+
   return (
-    <main className="relative h-[calc(100vh-4rem)] w-full overflow-hidden bg-[var(--color-forest)]">
+    <main className="relative h-[calc(100dvh-4rem)] w-full overflow-hidden bg-[var(--color-forest)]">
       {/* Floating natural-language search — top-center, always reachable
           (z-40 keeps it above both side panels on every breakpoint). */}
       <div
@@ -376,7 +518,7 @@ export default function MapExplorer() {
         />
       </div>
 
-      {panelOpen && (
+      {panelOpen && !isMobile && (
         <SearchResultsPanel
           results={search.results}
           mappableIds={loadedRouteIds}
@@ -390,8 +532,27 @@ export default function MapExplorer() {
         />
       )}
 
-      {/* FilterBar / Legend — hidden while the search panel is open (D1). */}
-      {!panelOpen && (
+      {panelOpen && isMobile && (
+        <SearchResultsDock
+          results={search.results}
+          mappableIds={loadedRouteIds}
+          selectedId={routeParam}
+          filtersRelaxed={search.filtersRelaxed}
+          isLoading={search.isLoading}
+          error={search.error}
+          onHover={setHoveredId}
+          onSelect={handleSelectResult}
+          onCenter={handleCenterResult}
+          onClose={handleCloseSearch}
+          detail={routeDetail}
+          detailLoading={routeLoading}
+          onCollapseDetail={clearSelection}
+        />
+      )}
+
+      {/* FilterBar / Legend — desktop only; hidden while the search panel is open
+          (D1). On mobile this lives behind a filter button + bottom sheet. */}
+      {!panelOpen && !isMobile && (
       <div className="map-panel absolute left-3 top-48 z-10 w-[min(27rem,calc(100vw-1.5rem))] rounded-lg border border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] p-3 shadow-[0_20px_55px_rgba(16,20,15,0.42)] backdrop-blur-md">
         <FilterBar
           value={filterState}
@@ -427,7 +588,7 @@ export default function MapExplorer() {
             </span>
           )}
           {routesError !== null && (
-            <span className="rounded border border-red-300/30 bg-red-300/10 px-2 py-1 text-red-200">
+            <span className="rounded border border-[var(--color-danger-border)] bg-[var(--color-danger-wash)] px-2 py-1 text-[var(--color-danger)]">
               Routes error
             </span>
           )}
@@ -442,7 +603,7 @@ export default function MapExplorer() {
             </span>
           )}
           {routeError !== null && (
-            <span className="rounded border border-red-300/30 bg-red-300/10 px-2 py-1 text-red-200">
+            <span className="rounded border border-[var(--color-danger-border)] bg-[var(--color-danger-wash)] px-2 py-1 text-[var(--color-danger)]">
               Detail error
             </span>
           )}
@@ -452,7 +613,7 @@ export default function MapExplorer() {
             </span>
           )}
           {facilitiesError !== null && (
-            <span className="rounded border border-red-300/30 bg-red-300/10 px-2 py-1 text-red-200">
+            <span className="rounded border border-[var(--color-danger-border)] bg-[var(--color-danger-wash)] px-2 py-1 text-[var(--color-danger)]">
               Facilities error
             </span>
           )}
@@ -460,7 +621,36 @@ export default function MapExplorer() {
       </div>
       )}
 
-      {routeDetail !== null && (
+      {/* Mobile filter affordance — one tap opens the controls in a bottom sheet,
+          keeping the default mobile view to just map + search. */}
+      {!panelOpen && isMobile && (
+        <button
+          type="button"
+          onClick={() => setFilterSheetOpen(true)}
+          aria-label="Filters and layers"
+          className="absolute bottom-4 left-4 z-30 flex h-12 w-12 items-center justify-center rounded-full border border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] text-[var(--color-cream)] shadow-[0_12px_30px_rgba(16,20,15,0.5)] backdrop-blur-md transition hover:border-[var(--color-leaf)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-leaf)]"
+        >
+          <SlidersHorizontal className="h-5 w-5" />
+        </button>
+      )}
+
+      <FilterSheet
+        open={isMobile && filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        filterState={filterState}
+        onFilterChange={setFilterState}
+        colorMode={colorMode}
+        onColorModeChange={setColorMode}
+        overlayOn={overlayOn}
+        onOverlayChange={setOverlayOn}
+        sourceSwatches={SOURCE_SWATCHES}
+        qualityGradient={QUALITY_GRADIENT}
+        facilitySwatches={FACILITY_SWATCHES}
+      />
+
+      {/* Detail sheet: desktop always; on mobile only when the dock isn't already
+          hosting the detail in its expanded state. */}
+      {routeDetail !== null && !(isMobile && panelOpen) && (
         <div className="absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-auto sm:right-3 sm:top-48 sm:w-96 sm:max-w-[36vw]">
           <RouteDetailPanel route={routeDetail} onClose={clearSelection} />
         </div>
@@ -469,9 +659,13 @@ export default function MapExplorer() {
       <Map
         ref={mapRef}
         initialViewState={view}
-        mapStyle={CARTO_DARK_MATTER}
+        mapStyle={mapStyle}
         interactiveLayerIds={['routes']}
-        onLoad={() => setMapLoaded(true)}
+        onLoad={(event) => {
+          setMapLoaded(true);
+          tuneFromEvent(event);
+        }}
+        onStyleData={tuneFromEvent}
         onClick={(event) => {
           const feature = event.features?.[0];
           const id = feature?.properties?.id;
@@ -503,7 +697,7 @@ export default function MapExplorer() {
             id="routes-casing"
             type="line"
             paint={{
-              'line-color': '#223020',
+              'line-color': casingColor,
               'line-opacity': routeOpacityExpression(
                 hoveredId,
                 CASING_FULL_OPACITY,

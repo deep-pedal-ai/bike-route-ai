@@ -33,7 +33,7 @@ type QuickQueriesProps = {
 export default function QuickQueries({ onSelect, disabled }: QuickQueriesProps) {
   return (
     <div className="flex flex-wrap justify-center gap-2">
-      <span className="mb-1 w-full text-center text-xs text-zinc-600">Common rides</span>
+      <span className="mb-1 w-full text-center text-xs text-[var(--color-moss-muted)]">Common rides</span>
       {QUICK_QUERIES.map((q) => (
         <button
           key={q.label}

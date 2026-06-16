@@ -56,13 +56,13 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
 
       <dl className="grid grid-cols-2 gap-3 text-sm">
         <div>
-          <dt title={CORPUS_FIELD_DOCS.distance_km} className="text-xs text-zinc-400">
+          <dt title={CORPUS_FIELD_DOCS.distance_km} className="text-xs text-[var(--color-sage-text)]">
             Distance (km)
           </dt>
           <dd className="font-mono text-[var(--color-cream)]">{formatNumber(p.distance_km, 1)}</dd>
         </div>
         <div>
-          <dt title={CORPUS_FIELD_DOCS.is_loop} className="text-xs text-zinc-400">
+          <dt title={CORPUS_FIELD_DOCS.is_loop} className="text-xs text-[var(--color-sage-text)]">
             Loop
           </dt>
           <dd className="font-mono text-[var(--color-cream)]">
@@ -70,25 +70,25 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
           </dd>
         </div>
         <div>
-          <dt title={CORPUS_FIELD_DOCS.ascent_m} className="text-xs text-zinc-400">
+          <dt title={CORPUS_FIELD_DOCS.ascent_m} className="text-xs text-[var(--color-sage-text)]">
             Ascent (m)
           </dt>
           <dd className="font-mono text-[var(--color-cream)]">{formatNumber(p.ascent_m, 0)}</dd>
         </div>
         <div>
-          <dt title={CORPUS_FIELD_DOCS.descent_m} className="text-xs text-zinc-400">
+          <dt title={CORPUS_FIELD_DOCS.descent_m} className="text-xs text-[var(--color-sage-text)]">
             Descent (m)
           </dt>
           <dd className="font-mono text-[var(--color-cream)]">{formatNumber(p.descent_m, 0)}</dd>
         </div>
         <div>
-          <dt title={CORPUS_FIELD_DOCS.quality_score} className="text-xs text-zinc-400">
+          <dt title={CORPUS_FIELD_DOCS.quality_score} className="text-xs text-[var(--color-sage-text)]">
             Quality score
           </dt>
           <dd className="font-mono text-[var(--color-cream)]">{formatNumber(p.quality_score, 2)}</dd>
         </div>
         <div>
-          <dt title={CORPUS_FIELD_DOCS.match_quality} className="text-xs text-zinc-400">
+          <dt title={CORPUS_FIELD_DOCS.match_quality} className="text-xs text-[var(--color-sage-text)]">
             Match quality
           </dt>
           <dd className="font-mono text-[var(--color-cream)]">{formatNumber(p.match_quality, 2)}</dd>
@@ -96,7 +96,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
         <div>
           <dt
             title={CORPUS_FIELD_DOCS.protected_lane_fraction}
-            className="text-xs text-zinc-400"
+            className="text-xs text-[var(--color-sage-text)]"
           >
             Protected lane
           </dt>
@@ -107,7 +107,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
         <div>
           <dt
             title={CORPUS_FIELD_DOCS.greenway_fraction}
-            className="text-xs text-zinc-400"
+            className="text-xs text-[var(--color-sage-text)]"
           >
             Greenway
           </dt>
@@ -116,7 +116,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
         <div>
           <dt
             title={CORPUS_FIELD_DOCS.facility_coverage_fraction}
-            className="text-xs text-zinc-400"
+            className="text-xs text-[var(--color-sage-text)]"
           >
             Facility coverage
           </dt>
@@ -127,7 +127,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
       </dl>
 
       <section className="space-y-1.5">
-        <h3 title={CORPUS_FIELD_DOCS.surface_breakdown} className="text-xs text-zinc-400">
+        <h3 title={CORPUS_FIELD_DOCS.surface_breakdown} className="text-xs text-[var(--color-sage-text)]">
           Surface
         </h3>
         <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[var(--color-bark-soft)]">
@@ -149,7 +149,7 @@ export default function RouteDetailPanel({ route, onClose }: RouteDetailPanelPro
       {p.attribution !== null && (
         <p
           title={CORPUS_FIELD_DOCS.attribution}
-          className="text-[11px] leading-snug text-zinc-500"
+          className="text-[11px] leading-snug text-[var(--color-moss-muted)]"
         >
           {p.attribution}
         </p>

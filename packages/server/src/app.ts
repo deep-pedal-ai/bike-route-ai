@@ -1,4 +1,5 @@
 import express from 'express';
+import morgan from 'morgan';
 import { createRoutesRouter } from './routes/routes.js';
 import { corpusRouter } from './routes/corpus.js';
 import { errorHandler } from './middleware/error-handler.js';
@@ -11,6 +12,7 @@ type AppDependencies = {
 export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
 
+  app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
   app.use(express.json());
   app.use('/api/routes', createRoutesRouter(dependencies));
   app.use('/api/corpus', corpusRouter);

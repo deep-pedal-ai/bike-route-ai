@@ -20,5 +20,6 @@ export function errorHandler(
     res.status(err.statusCode).json({ error: err.message, statusCode: err.statusCode });
     return;
   }
+  console.error('Unexpected error:', err);
   res.status(500).json({ error: 'Internal Server Error', statusCode: 500 });
 }

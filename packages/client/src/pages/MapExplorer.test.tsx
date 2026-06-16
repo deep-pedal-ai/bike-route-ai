@@ -28,8 +28,9 @@ import type { CorpusRouteProps, RouteSearchResult } from '@bike-route-ai/shared'
 // useImperativeHandle populates `mapRef.current` in the first commit, then the
 // onLoad→setMapLoaded re-render lets MapExplorer's passive fit effect call
 // fitBounds.
-const { layerSpy, mapSpy, fitBoundsSpy } = vi.hoisted(() => ({
+const { layerSpy, sourceSpy, mapSpy, fitBoundsSpy } = vi.hoisted(() => ({
   layerSpy: vi.fn(),
+  sourceSpy: vi.fn(),
   mapSpy: vi.fn(),
   fitBoundsSpy: vi.fn(),
 }));
@@ -52,7 +53,10 @@ vi.mock('react-map-gl/maplibre', async () => {
     },
   );
   Map.displayName = 'Map';
-  const Source = (props: MapComponentProps): ReactNode => props.children ?? null;
+  const Source = (props: MapComponentProps): ReactNode => {
+    sourceSpy(props);
+    return props.children ?? null;
+  };
   const Layer = (props: MapComponentProps): ReactNode => {
     layerSpy(props);
     return null;
@@ -119,6 +123,21 @@ function casingLayerProps(): Record<string, unknown> | undefined {
   return calls.at(-1)?.[0] as Record<string, unknown> | undefined;
 }
 
+// Latest props captured for the POI layer / source (id 'pois').
+function poiLayerProps(): Record<string, unknown> | undefined {
+  const calls = layerSpy.mock.calls.filter(
+    (c) => (c[0] as { id?: string }).id === 'pois',
+  );
+  return calls.at(-1)?.[0] as Record<string, unknown> | undefined;
+}
+
+function poiSourceProps(): Record<string, unknown> | undefined {
+  const calls = sourceSpy.mock.calls.filter(
+    (c) => (c[0] as { id?: string }).id === 'pois',
+  );
+  return calls.at(-1)?.[0] as Record<string, unknown> | undefined;
+}
+
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -129,6 +148,7 @@ function renderAt(path: string) {
 
 beforeEach(() => {
   layerSpy.mockClear();
+  sourceSpy.mockClear();
   mapSpy.mockClear();
   fitBoundsSpy.mockClear();
   mockedSearchRoutes.mockReset();
@@ -462,6 +482,102 @@ describe('MapExplorer — map-tab search', () => {
       'aria-current',
       'true',
     );
+  });
+});
+
+describe('MapExplorer — POI map layer', () => {
+  // A selected route detail carrying two POIs in different buckets.
+  function detailWithPois() {
+    const base = fixture.routeDetail as unknown as Record<string, unknown>;
+    const properties = base.properties as Record<string, unknown>;
+    return {
+      ...base,
+      properties: {
+        ...properties,
+        pois: [
+          {
+            id: 1,
+            name: 'Corner Café',
+            bucket: 'coffee_food',
+            lat: 40.67,
+            lng: -73.97,
+            distance_m: 120,
+            position_fraction: 0.1,
+            image_url: null,
+            image_license: null,
+            image_attribution: null,
+          },
+          {
+            id: 2,
+            name: 'River Overlook',
+            bucket: 'scenic',
+            lat: 40.66,
+            lng: -73.96,
+            distance_m: 300,
+            position_fraction: 0.8,
+            image_url: null,
+            image_license: null,
+            image_attribution: null,
+          },
+        ],
+      },
+    };
+  }
+
+  it('adds a pois source as a [lng,lat] FeatureCollection for the selected route', () => {
+    mockedUseCorpusRoute.mockReturnValue({
+      data: detailWithPois() as never,
+      loading: false,
+      error: null,
+    });
+
+    renderAt('/map?route=286');
+
+    const data = poiSourceProps()?.data as
+      | { type?: string; features?: Array<{ geometry?: { coordinates?: number[] } }> }
+      | undefined;
+    expect(data?.type).toBe('FeatureCollection');
+    expect(data?.features).toHaveLength(2);
+    // GeoJSON Point geometry is [lng, lat] — not [lat, lng].
+    expect(data?.features?.[0].geometry?.coordinates).toEqual([-73.97, 40.67]);
+  });
+
+  it('colors POI pins by bucket', () => {
+    mockedUseCorpusRoute.mockReturnValue({
+      data: detailWithPois() as never,
+      loading: false,
+      error: null,
+    });
+
+    renderAt('/map?route=286');
+
+    const paint = poiLayerProps()?.paint as Record<string, unknown> | undefined;
+    const color = paint?.['circle-color'];
+    // A `match` expression keyed on the bucket property.
+    expect(Array.isArray(color)).toBe(true);
+    expect((color as unknown[])[0]).toBe('match');
+    expect((color as unknown[])[1]).toEqual(['get', 'bucket']);
+    expect(color as unknown[]).toContain('coffee_food');
+    expect(color as unknown[]).toContain('scenic');
+  });
+
+  it('places the POI layer below the facilities layer via beforeId', () => {
+    mockedUseCorpusRoute.mockReturnValue({
+      data: detailWithPois() as never,
+      loading: false,
+      error: null,
+    });
+
+    renderAt('/map?route=286');
+
+    expect(poiLayerProps()?.beforeId).toBe('facilities');
+  });
+
+  it('renders no pois source/layer when the selection is cleared (no pois)', () => {
+    // Default beforeEach mock: useCorpusRoute → data:null.
+    renderAt('/map');
+    expect(poiSourceProps()).toBeUndefined();
+    expect(poiLayerProps()).toBeUndefined();
   });
 });
 

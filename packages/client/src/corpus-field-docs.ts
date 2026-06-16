@@ -37,4 +37,5 @@ export const CORPUS_FIELD_DOCS: Record<keyof CorpusRouteDetailProps, string> = {
   osm_way_id_count:
     'Number of OSM way IDs backing this route (0 for non-OSM sources).',
   tags: "Free-form tags carried from the source (e.g. canon's out_and_back flag).",
+  pois: 'Nearby points of interest (coffee, water/rest, scenic, landmark, bike services), ordered along the route. Display-only — never folded into the embedding.',
 };

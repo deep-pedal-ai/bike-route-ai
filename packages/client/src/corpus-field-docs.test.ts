@@ -26,6 +26,7 @@ const DETAIL_KEYS: (keyof CorpusRouteDetailProps)[] = [
   'attribution',
   'osm_way_id_count',
   'tags',
+  'pois',
 ];
 
 describe('CORPUS_FIELD_DOCS', () => {

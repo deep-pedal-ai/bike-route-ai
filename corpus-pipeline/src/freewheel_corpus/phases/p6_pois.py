@@ -111,6 +111,7 @@ def run_p6(
     image_transport: Callable[[str], dict] | None = None,
     cfg: SelectionConfig = DEFAULT_CONFIG,
     now: Callable[[], datetime] = _utcnow,
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> Phase6Stats:
     """Fetch + cache POIs for every route, idempotently.
 
@@ -118,6 +119,9 @@ def run_p6(
     to :func:`select_pois` (tests pass a fake that replays recorded fixtures).
     ``image_transport`` is the injectable Wikimedia HTTP hop for
     :func:`resolve_image` (``None`` uses the real ``httpx`` default).
+    ``progress`` (optional) is called once per route with a small dict
+    ``{i, total, route_id, event, ...}`` for live console logging — it never
+    affects the batch (a callback exception would propagate, so keep it cheap).
     """
     migrations_applied = migrations.run_migrations(conn)
     conn.commit()  # persist DDL before the loop so a per-route rollback can't undo it
@@ -128,17 +132,20 @@ def run_p6(
         cur.execute(_ROUTES_SQL)
         routes = cur.fetchall()
 
-    for route_id, geom_geojson in routes:
+    total = len(routes)
+    for i, (route_id, geom_geojson) in enumerate(routes, start=1):
         stats.routes_scanned += 1
 
         if _route_is_fresh(conn, route_id, cfg, current_time):
             stats.skipped_fresh += 1
+            _emit(progress, i, total, route_id, "skipped_fresh", {})
             continue
 
         # The whole per-route unit of work — select, image-resolve, upsert, log —
         # is guarded so ONE bad route logs an error and the batch continues (§10).
         # (Image resolution is also non-throwing, so a Wikimedia miss only drops
         # that POI's photo, not the route.)
+        event, detail = "error", {}
         try:
             route_geom = shape(json.loads(geom_geojson))
             selected = select_pois(
@@ -149,23 +156,37 @@ def run_p6(
                 _log(conn, "zero_pois", route_id, {"selected": 0}, None)
                 conn.commit()
                 stats.zero_pois += 1
-                continue
-
-            for poi in selected:
-                _upsert_poi_and_link(conn, route_id, poi, image_transport, current_time)
-
-            _log(conn, "success", route_id, {"selected": len(selected)}, None)
-            conn.commit()
-            stats.routes_with_pois += 1
-            stats.pois_upserted += len(selected)
+                event, detail = "zero_pois", {"selected": 0}
+            else:
+                for poi in selected:
+                    _upsert_poi_and_link(conn, route_id, poi, image_transport, current_time)
+                _log(conn, "success", route_id, {"selected": len(selected)}, None)
+                conn.commit()
+                stats.routes_with_pois += 1
+                stats.pois_upserted += len(selected)
+                event, detail = "success", {"selected": len(selected)}
         except Exception as exc:  # noqa: BLE001 — one bad route must not abort the run
             conn.rollback()
             _log(conn, "error", route_id, {"error": type(exc).__name__}, str(exc))
             conn.commit()
             stats.errors += 1
-            continue
+            event, detail = "error", {"error": type(exc).__name__}
+
+        _emit(progress, i, total, route_id, event, detail)
 
     return stats
+
+
+def _emit(
+    progress: Callable[[dict[str, Any]], None] | None,
+    i: int,
+    total: int,
+    route_id: int,
+    event: str,
+    detail: dict[str, Any],
+) -> None:
+    if progress is not None:
+        progress({"i": i, "total": total, "route_id": route_id, "event": event, **detail})
 
 
 def _route_is_fresh(

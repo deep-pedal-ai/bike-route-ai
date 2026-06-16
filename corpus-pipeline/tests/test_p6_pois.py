@@ -184,6 +184,27 @@ def test_p6_survives_wikimedia_failure_storing_icon_only_poi(clean_db):
     assert row == ("Wiki Café", None)  # image hop failed -> icon-only, route kept
 
 
+def test_p6_progress_callback_fires_once_per_route(clean_db):
+    """The optional progress hook is called once per route with the outcome —
+    the basis for live console logging and the ingest_log frontend."""
+    _migrate(clean_db)
+    _seed_route(clean_db)
+
+    events: list[dict] = []
+    p6.run_p6(
+        clean_db,
+        overpass_client=FakeOverpass([_CAFE_ELEMENT]),
+        now=lambda: _FIXED_NOW,
+        progress=events.append,
+    )
+
+    assert len(events) == 1  # one seeded route
+    e = events[0]
+    assert e["event"] == "success"
+    assert e["i"] == 1 and e["total"] == 1
+    assert e["selected"] == 1
+
+
 def test_freshness_window_uses_config_days():
     """Sanity: the config the CLI passes carries a positive freshness window."""
     assert DEFAULT_CONFIG.freshness_days > 0

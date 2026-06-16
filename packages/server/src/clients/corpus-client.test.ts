@@ -63,6 +63,9 @@ const DETAIL_KEYS: ReadonlyArray<keyof CorpusRouteDetailProps> = [
   'attribution',
   'osm_way_id_count',
   'tags',
+  // S8: detail read-path JOINs nearby POIs; coalesce(..., '[]') makes the key
+  // always present, so the exact-key assertion below must include it.
+  'pois',
 ];
 
 // A tiny bbox (sparse) vs a metro-wide bbox (dense, exceeds the cap).

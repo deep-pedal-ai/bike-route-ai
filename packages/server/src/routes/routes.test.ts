@@ -84,6 +84,9 @@ describe('POST /api/routes/search', () => {
       filtersRelaxed: false,
       results: [{ id: 'greenway', name: 'Result for quiet loop' }],
     });
+    // Regression (POI enrichment S8): the search path is untouched by the
+    // detail-panel pois[] work and must not gain a `pois` field or change shape.
+    expect(res.body.results[0]).not.toHaveProperty('pois');
   });
 
   it('returns 400 for a blank query', async () => {

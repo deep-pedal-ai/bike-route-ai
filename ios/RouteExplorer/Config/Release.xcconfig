@@ -1,0 +1,2 @@
+API_BASE_URL = https:/$()/bike-route-ai.vercel.app
+ENABLE_TEST_FIXTURES = NO

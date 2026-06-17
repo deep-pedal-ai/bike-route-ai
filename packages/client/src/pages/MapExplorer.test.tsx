@@ -185,6 +185,24 @@ describe('MapExplorer', () => {
     expect(screen.getByText('Prospect Park Loop (double)')).toBeInTheDocument();
   });
 
+  it('deep-links: zooms the camera to the selected route after the corpus loads', () => {
+    mockedUseCorpusRoute.mockReturnValue({
+      data: fixture.routeDetail as never,
+      loading: false,
+      error: null,
+    });
+
+    renderAt('/map?route=286');
+
+    expect(fitBoundsSpy).toHaveBeenCalledWith(
+      boundsForIds(['286']),
+      expect.objectContaining({
+        maxZoom: 16,
+        padding: { top: 224, bottom: 64, left: 452, right: 420 },
+      }),
+    );
+  });
+
   it('passes route=null to the detail hook when no ?route param is present', () => {
     renderAt('/map');
     expect(mockedUseCorpusRoute).toHaveBeenCalledWith(null);

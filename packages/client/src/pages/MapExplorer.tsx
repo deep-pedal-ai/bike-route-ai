@@ -357,6 +357,7 @@ export default function MapExplorer() {
   const mapRef = useRef<MapRef>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const didInitialFitRef = useRef(false);
+  const focusedRouteParamRef = useRef<string | null>(null);
 
   // Animate the camera to frame `bounds`. Dormant infrastructure for the search
   // feature (hover/click zoom land in later phases); the initial fit-to-all is
@@ -452,6 +453,27 @@ export default function MapExplorer() {
     [routes],
   );
 
+  // Cold deep-links and map-line taps select a route through the URL. Keep the
+  // camera in sync with that selection so the map zooms to the chosen route
+  // instead of staying at the all-corpus overview.
+  useEffect(() => {
+    if (routeParam === null) {
+      focusedRouteParamRef.current = null;
+      return;
+    }
+    if (!mapLoaded || routes.features.length === 0) return;
+    if (focusedRouteParamRef.current === routeParam) return;
+
+    const bounds = boundsForRouteId(routes, routeParam);
+    if (bounds === null) return;
+
+    focusedRouteParamRef.current = routeParam;
+    focusBounds(bounds, {
+      padding: framePadding({ left: true, right: true, top: true }),
+      maxZoom: 16,
+    });
+  }, [routeParam, mapLoaded, routes, focusBounds, framePadding]);
+
   // When results arrive, frame the union of the mappable result geometries —
   // the filtered-in routes are otherwise off-screen and hover-highlight has
   // nothing visible to act on (plan §5.3). Mark as fitted only on a successful
@@ -506,6 +528,7 @@ export default function MapExplorer() {
     // detail panel (right) about to open, under the top search bar — reserve
     // all three so the route stays clear of every floating panel.
     focusBounds(bounds, { padding: framePadding({ left: true, right: true, top: true }) });
+    focusedRouteParamRef.current = String(id);
     selectRoute(id);
   };
 

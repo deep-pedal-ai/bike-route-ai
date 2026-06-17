@@ -39,12 +39,14 @@ function forward(err: unknown, next: NextFunction): void {
 }
 
 export async function listRoutes(
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> {
   try {
-    const result = await service.listRoutes();
+    // ?region=<key> scopes the read partition. Absent → all regions.
+    const region = req.query.region as string | undefined;
+    const result = await service.listRoutes(region);
     res.json(result);
   } catch (err) {
     forward(err, next);

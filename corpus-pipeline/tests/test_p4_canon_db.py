@@ -107,6 +107,19 @@ def test_canon_distance_within_tolerance_is_stored(clean_db):
     assert abs(dist - 4.64) < 0.1
 
 
+def test_canon_row_carries_region_ny(clean_db):
+    """Slice 1: the canon upsert writes region='ny' explicitly (read partition key)."""
+    _migrate(clean_db)
+    ors = FakeOrs(_real_fc())
+    entry = _canon_entry(expected_km=4.6, out_and_back=False)
+
+    p4.ingest_canon(clean_db, [entry], ors_client=ors)
+
+    with clean_db.cursor() as cur:
+        cur.execute("SELECT region FROM routes WHERE source='canon'")
+        assert cur.fetchone()[0] == "ny"
+
+
 def test_canon_distance_out_of_tolerance_is_skipped_and_logged(clean_db):
     """behavior 3: the routed distance (~4.64 km) is > ±25% from a wildly-off
     expected_km (e.g. 20 km) → the entry is skipped (NOT stored) and a

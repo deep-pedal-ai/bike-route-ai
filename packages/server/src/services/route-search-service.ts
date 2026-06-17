@@ -1,5 +1,6 @@
 import type { RouteSearchResponse, RouteSearchResult } from '@bike-route-ai/shared';
 import {
+  DEFAULT_REGION,
   EMBEDDING_MODEL_ID,
   type RouteSearchAiClient,
   type RouteSearchCandidate,
@@ -14,9 +15,10 @@ export function createRouteSearchService(
   dbClient: RouteSearchDbClient,
 ): RouteSearchService {
   return {
-    async search(query: string): Promise<RouteSearchResponse> {
+    async search(query: string, region?: string): Promise<RouteSearchResponse> {
       const trimmedQuery = query.trim();
-      console.log(`Route search: query="${trimmedQuery}"`);
+      const searchRegion = region ?? DEFAULT_REGION;
+      console.log(`Route search: query="${trimmedQuery}" region="${searchRegion}"`);
 
       const constraints = sanitizeConstraints(await aiClient.extractConstraints(trimmedQuery));
       console.log('Route search: extracted constraints', constraints);
@@ -26,12 +28,18 @@ export function createRouteSearchService(
       await dbClient.assertEmbeddingModel(EMBEDDING_MODEL_ID);
 
       let filtersRelaxed = false;
-      let candidates = await dbClient.findNearestRoutes(queryEmbedding, constraints, 5);
+      let candidates = await dbClient.findNearestRoutes(
+        queryEmbedding,
+        constraints,
+        5,
+        searchRegion,
+      );
 
       if (candidates.length === 0 && hasHardConstraints(constraints)) {
         console.log('Route search: no results with constraints, retrying without filters');
         filtersRelaxed = true;
-        candidates = await dbClient.findNearestRoutes(queryEmbedding, {}, 5);
+        // region is preserved here — only the soft constraints relax.
+        candidates = await dbClient.findNearestRoutes(queryEmbedding, {}, 5, searchRegion);
       }
 
       if (candidates.length === 0) {

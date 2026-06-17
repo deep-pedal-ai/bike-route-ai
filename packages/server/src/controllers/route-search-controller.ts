@@ -9,7 +9,10 @@ export function createRouteSearchController(routeSearchService: RouteSearchServi
       try {
         const validation = validateSearchRequest(req.body);
         if (validation.ok) {
-          const response = await routeSearchService.search(validation.body.query);
+          const response = await routeSearchService.search(
+            validation.body.query,
+            validation.body.region,
+          );
           res.json(response);
         } else {
           next(new HttpError(400, validation.error));
@@ -38,7 +41,10 @@ function validateSearchRequest(body: unknown): SearchRequestValidation {
     return { ok: false, error: `Query must be ${MAX_SEARCH_QUERY_LENGTH} characters or fewer` };
   }
 
-  return { ok: true, body: { query } };
+  // region is optional; only carry it through when it's a non-empty string.
+  const region = typeof body.region === 'string' && body.region.length > 0 ? body.region : undefined;
+
+  return { ok: true, body: { query, region } };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

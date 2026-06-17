@@ -50,11 +50,23 @@ describe('useRouteSearch', () => {
       await result.current.search('quiet riverside loop');
     });
 
-    expect(searchRoutesMock).toHaveBeenCalledWith('quiet riverside loop');
+    expect(searchRoutesMock).toHaveBeenCalledWith('quiet riverside loop', undefined);
     expect(result.current.results).toEqual(oneResult);
     expect(result.current.filtersRelaxed).toBe(true);
     expect(result.current.error).toBeNull();
     expect(result.current.isLoading).toBe(false);
+  });
+
+  it('passes the region through to searchRoutes so results stay in-metro', async () => {
+    searchRoutesMock.mockResolvedValue({ results: oneResult, filtersRelaxed: false });
+
+    const { result } = renderHook(() => useRouteSearch('ny'));
+
+    await act(async () => {
+      await result.current.search('riverside loop');
+    });
+
+    expect(searchRoutesMock).toHaveBeenCalledWith('riverside loop', 'ny');
   });
 
   it('clears results to null while a new search is in flight', async () => {

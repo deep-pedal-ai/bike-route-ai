@@ -8,10 +8,12 @@ import { SlidersHorizontal } from 'lucide-react';
 import FilterBar from '../components/FilterBar';
 import FilterSheet from '../components/FilterSheet';
 import Legend from '../components/Legend';
+import RegionSwitcher from '../components/RegionSwitcher';
 import RouteDetailPanel from '../components/RouteDetailPanel';
 import SearchBar from '../components/SearchBar';
 import SearchResultsPanel from '../components/SearchResultsPanel';
 import SearchResultsDock from '../components/SearchResultsDock';
+import { REGIONS, regionFor, DEFAULT_REGION } from '../regions';
 import { useTheme } from '../theme/use-theme.js';
 import { useIsMobile } from '../hooks/use-is-mobile';
 import { useCorpusRoutes } from '../hooks/use-corpus-routes';
@@ -49,8 +51,10 @@ type MapView = {
 const SOURCES = ['osm_relation', 'canon', 'generated', 'nysdot'] as const;
 const FACILITY_CLASSES = ['protected', 'lane', 'sharrow', 'greenway', 'other'] as const;
 
-// Sensible NY default centre used until routes load.
-const NY_DEFAULT = { longitude: -73.95, latitude: 40.7, zoom: 10 };
+// Per-region initial camera lookup. Slice 1 has only NY; the default center +
+// zoom comes from the region registry (regions.ts), structured per-region so
+// adding a region is data, not a code change. (No geolocate / soft-suggest in
+// Slice 1 — those are a later slice.)
 
 // Baseline breathing room (px) between a framed route and the map edge. The
 // per-panel padding in framePadding builds on top of this.
@@ -222,10 +226,10 @@ function fitZoom(west: number, south: number, east: number, north: number): numb
   return Math.max(5, Math.min(10, Math.min(zoomX, zoomY)));
 }
 
-// Centre and zoom derived from route bounds; NY default while empty.
-function viewFromRoutes(routes: CorpusRoutesResponse): MapView {
+// Centre and zoom derived from route bounds; the region's default while empty.
+function viewFromRoutes(routes: CorpusRoutesResponse, regionDefault: MapView): MapView {
   if (routes.features.length === 0) {
-    return NY_DEFAULT;
+    return regionDefault;
   }
   const [[west, south], [east, north]] = fitBoundsFromFeatures(routes);
   return {
@@ -250,6 +254,10 @@ const QUALITY_GRADIENT = { from: colorByQuality(0), to: colorByQuality(1) };
 export default function MapExplorer() {
   const { theme } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
+  // Read region from the URL (?region=, default 'ny'), alongside ?route=. The
+  // registry validates/falls back, so a stray key never breaks the view.
+  const regionParam = searchParams.get('region') ?? DEFAULT_REGION;
+  const region = regionFor(regionParam);
   const [filterState, setFilterState] = useState<FilterState>({ sources: [] });
   const [colorMode, setColorMode] = useState<ColorMode>('source');
   const [overlayOn, setOverlayOn] = useState<boolean>(false);
@@ -259,7 +267,7 @@ export default function MapExplorer() {
   // Natural-language route search (shared with the Generate page). Id of the
   // result route the user is pointing at (string-normalized) drives the routes
   // layer's line-opacity: hovered route bright, others dimmed (D4).
-  const search = useRouteSearch();
+  const search = useRouteSearch(region.key);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   // Wraps the floating SearchBar so focus can return to it when the panel closes.
   const searchFieldRef = useRef<HTMLDivElement>(null);
@@ -268,7 +276,7 @@ export default function MapExplorer() {
     data: routesData,
     loading: routesLoading,
     error: routesError,
-  } = useCorpusRoutes();
+  } = useCorpusRoutes(region.key);
   const routes = routesData ?? EMPTY_ROUTES;
 
   const routeParam = searchParams.get('route');
@@ -292,7 +300,7 @@ export default function MapExplorer() {
     overlayOn,
   );
 
-  const view = viewFromRoutes(routes);
+  const view = viewFromRoutes(routes, region.defaultView);
 
   // --- Imperative camera. The old `<Map key=…>` remount threw the camera away
   // on every view change and could not animate. We hold a ref to the map and
@@ -433,6 +441,15 @@ export default function MapExplorer() {
     setSearchParams(next);
   };
 
+  // Switch the active region via the URL (?region=). Drop ?route= because a
+  // route id belongs to one region's corpus, so it can't survive the switch.
+  const selectRegion = (key: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('region', key);
+    next.delete('route');
+    setSearchParams(next);
+  };
+
   // Click a mappable result card → animate to frame it + open its detail panel
   // (D5). The null guard is belt-and-braces: no-geometry cards aren't clickable.
   const handleSelectResult = (id: string) => {
@@ -502,6 +519,12 @@ export default function MapExplorer() {
 
   return (
     <main className="relative h-[calc(100dvh-4rem)] w-full overflow-hidden bg-[var(--color-forest)]">
+      {/* Region switcher — top-left, distinct from the centered search bar. The
+          read partition key; clicking a pill updates ?region= in the URL. */}
+      <div className="absolute left-3 top-3 z-40">
+        <RegionSwitcher regions={REGIONS} current={region.key} onChange={selectRegion} />
+      </div>
+
       {/* Floating natural-language search — top-center, always reachable
           (z-40 keeps it above both side panels on every breakpoint). */}
       <div

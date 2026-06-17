@@ -1,5 +1,11 @@
 // Corpus map-tab contract — TYPES ONLY (shared is types-only per CLAUDE.md).
 // Frozen in P0; any change requires an orchestrator re-freeze + dependent notice.
+// RE-FROZEN (multi-region Slice 1): added `region` to CorpusRouteProps as the
+// read partition key (flows into CorpusRouteDetailProps). Dependents notified:
+//   server  — db/schema.ts mirror, corpus-client.ts SQL (overview + detail),
+//             corpus-service getRoutesOverview(region?) seam.
+//   client  — corpus-field-docs.ts (exhaustive Record over the detail keys),
+//             RouteDetailPanel tooltips, use-corpus-routes(region) hook.
 // GeoJSON-native: geometry is EPSG:4326 with [lng, lat] coordinate order.
 import type {
   Feature,
@@ -13,6 +19,9 @@ export type CorpusRouteProps = {
   id: number;
   name: string | null;
   source: string;
+  // Read partition key (e.g. 'ny'). Every route belongs to exactly one region;
+  // the serving app scopes queries, camera, and search by it.
+  region: string;
   distance_km: number | null;
   is_loop: boolean | null;
   quality_score: number | null;

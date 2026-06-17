@@ -21,7 +21,7 @@ export type UseRouteSearch = {
   clear: () => void;
 };
 
-export function useRouteSearch(): UseRouteSearch {
+export function useRouteSearch(region?: string): UseRouteSearch {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<RouteSearchResult[] | null>(null);
@@ -36,7 +36,8 @@ export function useRouteSearch(): UseRouteSearch {
     setError(null);
 
     try {
-      const response = await searchRoutes(q.trim());
+      // region keeps results in-metro; the server defaults it when absent.
+      const response = await searchRoutes(q.trim(), region);
       setResults(response.results);
       setFiltersRelaxed(response.filtersRelaxed);
     } catch (err) {

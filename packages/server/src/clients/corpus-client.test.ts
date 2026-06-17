@@ -41,6 +41,7 @@ const OVERVIEW_KEYS: ReadonlyArray<keyof CorpusRouteProps> = [
   'id',
   'name',
   'source',
+  'region',
   'distance_km',
   'is_loop',
   'quality_score',

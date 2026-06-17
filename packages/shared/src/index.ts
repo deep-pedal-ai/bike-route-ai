@@ -16,6 +16,8 @@ export interface RouteResponse {
 
 export type RouteSearchRequest = {
   query: string;
+  // Optional read partition key (e.g. 'ny'); keeps search results in-metro.
+  region?: string;
 };
 
 export type RouteSearchResult = {

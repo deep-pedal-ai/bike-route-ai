@@ -60,9 +60,15 @@ export function createPgRouteSearchDbClient(
       embedding: number[],
       constraints: RouteSearchConstraints,
       limit: number,
+      region: string,
     ): Promise<RouteSearchCandidate[]> {
       const distance = cosineDistance(routes.embedding, embedding);
-      const whereClauses: SQL[] = [isNotNull(routes.embedding)];
+      // region scopes the partition and is applied on EVERY call (constrained
+      // AND relaxed), so the relax path can never cross regions.
+      const whereClauses: SQL[] = [
+        isNotNull(routes.embedding),
+        eq(routes.region, region),
+      ];
 
       if (constraints.minKm !== undefined) {
         whereClauses.push(gte(routes.distanceKm, constraints.minKm));

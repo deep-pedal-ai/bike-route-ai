@@ -45,7 +45,12 @@ describe('route search service', () => {
 
     expect(dbClient.assertedModelIds).toEqual([EMBEDDING_MODEL_ID]);
     expect(dbClient.calls).toEqual([
-      { embedding: [0.1, 0.2, 0.3], constraints: { minKm: 15, maxKm: 25, isLoop: true }, limit: 5 },
+      {
+        embedding: [0.1, 0.2, 0.3],
+        constraints: { minKm: 15, maxKm: 25, isLoop: true },
+        limit: 5,
+        region: 'ny',
+      },
     ]);
     expect(response.filtersRelaxed).toBe(false);
     expect(response.results[0]).toMatchObject({
@@ -75,6 +80,32 @@ describe('route search service', () => {
     ]);
     expect(response.results).toHaveLength(1);
     expect(response.results[0].id).toBe('ridge');
+  });
+
+  it('keeps the region on BOTH the constrained and the relaxed query (partition invariant)', async () => {
+    const aiClient = createFakeAiClient({
+      constraints: { minKm: 300, maxKm: 330, isLoop: true },
+      rankings: [{ id: 'ridge', blurb: 'Closest available longer loop.' }],
+    });
+    // First (constrained) call returns nothing → relax path fires.
+    const dbClient = createFakeDbClient([[], [CANDIDATES[1]]]);
+    const service = createRouteSearchService(aiClient, dbClient);
+
+    await service.search('200 mile loop in the city', 'ny');
+
+    // Region must be present on EVERY call — the relax path drops constraints,
+    // not the region, so a query never ranks another metro's routes.
+    expect(dbClient.calls.map((call) => call.region)).toEqual(['ny', 'ny']);
+  });
+
+  it('defaults the region to ny when the caller omits it', async () => {
+    const aiClient = createFakeAiClient({ constraints: {}, rankings: [] });
+    const dbClient = createFakeDbClient([CANDIDATES]);
+    const service = createRouteSearchService(aiClient, dbClient);
+
+    await service.search('quiet ride');
+
+    expect(dbClient.calls[0].region).toBe('ny');
   });
 
   it('falls back to cosine order when rerank returns an out-of-set id', async () => {
@@ -138,6 +169,7 @@ type DbCall = {
   embedding: number[];
   constraints: RouteSearchConstraints;
   limit: number;
+  region: string;
 };
 
 type FakeDbClient = RouteSearchDbClient & {
@@ -159,8 +191,9 @@ function createFakeDbClient(candidateResponses: RouteSearchCandidate[][]): FakeD
       embedding: number[],
       constraints: RouteSearchConstraints,
       limit: number,
+      region: string,
     ): Promise<RouteSearchCandidate[]> {
-      calls.push({ embedding, constraints, limit });
+      calls.push({ embedding, constraints, limit, region });
       return candidateResponses[calls.length - 1] ?? [];
     },
   };

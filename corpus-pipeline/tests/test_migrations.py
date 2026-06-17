@@ -24,7 +24,12 @@ def test_run_migrations_applies_001_and_records_it(clean_db):
     applied = migrations.run_migrations(clean_db)
     clean_db.commit()
 
-    assert applied == ["001_init.sql", "002_embeddings.sql", "003_region.sql"]
+    assert applied == [
+        "001_init.sql",
+        "002_embeddings.sql",
+        "003_pois.sql",
+        "004_region.sql",
+    ]
     assert _table_exists(clean_db, "routes")
     assert _table_exists(clean_db, "facility_segments")
     assert _table_exists(clean_db, "ingest_log")
@@ -34,7 +39,8 @@ def test_run_migrations_applies_001_and_records_it(clean_db):
         assert [r[0] for r in cur.fetchall()] == [
             "001_init.sql",
             "002_embeddings.sql",
-            "003_region.sql",
+            "003_pois.sql",
+            "004_region.sql",
         ]
 
 
@@ -45,12 +51,17 @@ def test_run_migrations_is_idempotent(clean_db):
     second = migrations.run_migrations(clean_db)
     clean_db.commit()
 
-    assert first == ["001_init.sql", "002_embeddings.sql", "003_region.sql"]
+    assert first == [
+        "001_init.sql",
+        "002_embeddings.sql",
+        "003_pois.sql",
+        "004_region.sql",
+    ]
     assert second == []  # no pending migrations
 
     with clean_db.cursor() as cur:
         cur.execute("SELECT count(*) FROM schema_migrations")
-        assert cur.fetchone()[0] == 3  # not duplicated
+        assert cur.fetchone()[0] == 4  # not duplicated
 
 
 def _columns(conn, table: str) -> dict[str, str]:
@@ -65,9 +76,10 @@ def _columns(conn, table: str) -> dict[str, str]:
 
 
 def test_region_column_added_with_ny_default(clean_db):
-    """003 adds a NOT NULL region column defaulting to 'ny' on both tables, and
-    an existing pre-region row backfills to 'ny' via the DEFAULT."""
-    # Apply 001 + 002 (region column does not yet exist), seed a row, then apply 003.
+    """004_region adds a NOT NULL region column defaulting to 'ny' on both tables,
+    and an existing pre-region row backfills to 'ny' via the DEFAULT."""
+    # Apply all migrations; 004_region adds the region column (003_pois is the POI
+    # feature's migration and does not touch routes' region partitioning).
     migrations.run_migrations(
         clean_db, migrations_dir=migrations._MIGRATIONS_DIR
     )

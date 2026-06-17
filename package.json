@@ -1,6 +1,7 @@
 {
   "name": "bike-route-ai",
   "private": true,
+  "type": "module",
   "workspaces": [
     "packages/*"
   ],

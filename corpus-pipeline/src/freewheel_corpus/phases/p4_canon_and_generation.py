@@ -60,6 +60,9 @@ GENERATED_ATTRIBUTION = (
 )
 MATCH_QUALITY = 1.0
 
+# Slice 1 literal: every row is NY. RegionProfile threads this later (§2, §8).
+REGION = "ny"
+
 # --- ORS extra_info value-code → human string maps --------------------------
 # ORS encodes surface / waytype / steepness as integer codes in the RLE extras.
 # We map them to the string keys the Phase-3 surface_quality scorer + the
@@ -316,13 +319,13 @@ def _iter_variants(entry: dict[str, Any]):
 
 _CANON_UPSERT_SQL = """
 INSERT INTO routes (
-    source, source_id, name,
+    region, source, source_id, name,
     geom, start_point, is_loop, distance_km, match_quality,
     ascent_m, descent_m,
     surface_breakdown, waytype_breakdown, steepness_breakdown,
     tags, attribution
 ) VALUES (
-    %(source)s, %(source_id)s, %(name)s,
+    %(region)s, %(source)s, %(source_id)s, %(name)s,
     ST_GeomFromText(%(geom_wkt)s, 4326),
     ST_GeomFromText(%(start_wkt)s, 4326),
     %(is_loop)s, %(distance_km)s, %(match_quality)s,
@@ -331,7 +334,7 @@ INSERT INTO routes (
     %(steepness_breakdown)s::jsonb,
     %(tags)s::jsonb, %(attribution)s
 )
-ON CONFLICT (source, source_id) DO UPDATE SET
+ON CONFLICT (region, source, source_id) DO UPDATE SET
     name                = EXCLUDED.name,
     geom                = EXCLUDED.geom,
     start_point         = EXCLUDED.start_point,
@@ -507,6 +510,7 @@ def ingest_canon(
                 startpt = line.coords[0]
                 tags = {"out_and_back": voab, "variant": vname}
                 params = {
+                    "region": REGION,
                     "source": CANON_SOURCE,
                     "source_id": vslug,
                     "name": f"{entry.get('name', entry['slug'])} ({vname})",
@@ -746,7 +750,7 @@ class GenerationStats:
 
 _GEN_UPSERT_SQL = """
 INSERT INTO routes (
-    source, source_id, name,
+    region, source, source_id, name,
     geom, start_point, is_loop, distance_km, match_quality,
     ascent_m, descent_m,
     surface_breakdown, waytype_breakdown, steepness_breakdown,
@@ -754,7 +758,7 @@ INSERT INTO routes (
     quality_score,
     tags, attribution
 ) VALUES (
-    %(source)s, %(source_id)s, %(name)s,
+    %(region)s, %(source)s, %(source_id)s, %(name)s,
     ST_GeomFromText(%(geom_wkt)s, 4326),
     ST_GeomFromText(%(start_wkt)s, 4326),
     %(is_loop)s, %(distance_km)s, %(match_quality)s,
@@ -764,7 +768,7 @@ INSERT INTO routes (
     %(protected)s, %(greenway)s, %(coverage)s, %(quality)s,
     %(tags)s::jsonb, %(attribution)s
 )
-ON CONFLICT (source, source_id) DO UPDATE SET
+ON CONFLICT (region, source, source_id) DO UPDATE SET
     name                = EXCLUDED.name,
     geom                = EXCLUDED.geom,
     start_point         = EXCLUDED.start_point,
@@ -961,6 +965,7 @@ def generate_loops(
                     startpt = line.coords[0]
                     tags = {"seed_point_index": sp_idx, "target_km": target_km, "seed": seed}
                     params = {
+                        "region": REGION,
                         "source": GENERATED_SOURCE,
                         "source_id": source_id,
                         "name": f"Generated loop {int(target_km)} km (seed {seed}) #{sp_idx}",

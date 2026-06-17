@@ -45,6 +45,9 @@ CURRENT_STATUS = "Current"
 
 ATTRIBUTION = "NYC DOT Bicycle Routes (NYC Open Data, mzxg-pwib)"
 
+# Slice 1 literal: every facility row is NY. RegionProfile threads this later (§2, §8).
+REGION = "ny"
+
 # facilitycl code -> normalized class (grnwy='Greenway' overrides to 'greenway').
 _FACILITY_CLASS_MAP = {
     "I": "protected",   # protected path / off-street
@@ -108,9 +111,9 @@ class FacilityStats:
 
 _INSERT_SQL = """
 INSERT INTO facility_segments (
-    source, facility_id, facility_class, geom, status, borough, attribution
+    region, source, facility_id, facility_class, geom, status, borough, attribution
 ) VALUES (
-    %(source)s, %(facility_id)s, %(facility_class)s,
+    %(region)s, %(source)s, %(facility_id)s, %(facility_class)s,
     ST_GeomFromText(%(geom_wkt)s, 4326),
     %(status)s, %(borough)s, %(attribution)s
 )
@@ -216,6 +219,7 @@ def ingest_facilities(
             cur.execute(
                 _INSERT_SQL,
                 {
+                    "region": REGION,
                     "source": SOURCE,
                     "facility_id": (
                         str(props["segmentid"]) if props.get("segmentid") is not None else None

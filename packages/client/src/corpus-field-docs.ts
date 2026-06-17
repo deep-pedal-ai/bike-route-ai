@@ -9,6 +9,8 @@ export const CORPUS_FIELD_DOCS: Record<keyof CorpusRouteDetailProps, string> = {
   name: 'Human-readable route name (may be empty for unnamed routes).',
   source:
     'Provenance — which pipeline source produced this route (e.g. osm_relation, canon, nysdot, generated).',
+  region:
+    'Read partition key — which metro this route belongs to (e.g. ny). Scopes the corpus query, camera, and search.',
   source_id:
     'Stable per-source identifier; (source, source_id) uniquely keys the route — the pipeline upsert/idempotency seam.',
   distance_km: 'Route length in kilometres.',

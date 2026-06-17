@@ -18,7 +18,9 @@ import { toFeatureCollection, toFacilitiesResponse } from './geojson.js';
 // these EXACT signatures; the service depends only on this type (never the real
 // client, which hits the DB and is built in parallel).
 export type CorpusClient = {
-  getRoutesOverview(): Promise<Feature<LineString, CorpusRouteProps>[]>;
+  getRoutesOverview(
+    region?: string,
+  ): Promise<Feature<LineString, CorpusRouteProps>[]>;
   getRouteById(
     id: number,
   ): Promise<Feature<LineString, CorpusRouteDetailProps> | null>;
@@ -94,10 +96,10 @@ export function parseClasses(str?: string): string[] | undefined {
 // Factory: wire a CorpusClient into the pure application-service operations.
 export function createCorpusService(client: CorpusClient) {
   return {
-    async listRoutes(): Promise<
-      FeatureCollection<LineString, CorpusRouteProps>
-    > {
-      const features = await client.getRoutesOverview();
+    async listRoutes(
+      region?: string,
+    ): Promise<FeatureCollection<LineString, CorpusRouteProps>> {
+      const features = await client.getRoutesOverview(region);
       return toFeatureCollection(features);
     },
 

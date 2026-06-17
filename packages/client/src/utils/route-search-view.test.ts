@@ -55,6 +55,7 @@ function feature(
       id,
       name: `route-${id}`,
       source: 'canon',
+      region: 'ny',
       distance_km: 10,
       is_loop: false,
       quality_score: 0.5,

@@ -21,6 +21,7 @@ const routeFeature = (id: number): Feature<LineString, CorpusRouteProps> => ({
     id,
     name: `route-${id}`,
     source: 'canon',
+    region: 'ny',
     distance_km: 10,
     is_loop: false,
     quality_score: 0.5,
@@ -150,6 +151,17 @@ describe('createCorpusService().listRoutes', () => {
     expect(fc.type).toBe('FeatureCollection');
     expect(fc.features).toHaveLength(2);
     expect(client.getRoutesOverview).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards the region to the client so the read is partition-scoped', async () => {
+    const client = makeClient({
+      getRoutesOverview: vi.fn().mockResolvedValue([routeFeature(1)]),
+    });
+    const service = createCorpusService(client);
+
+    await service.listRoutes('ny');
+
+    expect(client.getRoutesOverview).toHaveBeenCalledWith('ny');
   });
 });
 

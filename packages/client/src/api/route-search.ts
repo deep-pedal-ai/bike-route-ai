@@ -2,13 +2,17 @@ import type { ErrorResponse, RouteSearchResponse, RouteSearchResult } from '@bik
 
 const ROUTE_SEARCH_ENDPOINT = '/api/routes/search';
 
-export async function searchRoutes(query: string, fetchImpl: typeof fetch = fetch): Promise<RouteSearchResponse> {
+export async function searchRoutes(
+  query: string,
+  region?: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<RouteSearchResponse> {
   const response = await fetchImpl(ROUTE_SEARCH_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, region }),
   });
 
   const body = await readJson(response);

@@ -16,9 +16,11 @@ import type { Feature, LineString, MultiLineString } from 'geojson';
 
 type ResultRow<T> = { result: T };
 
-export const getRoutesOverview = async (): Promise<
-  Feature<LineString, CorpusRouteProps>[]
-> => {
+export const getRoutesOverview = async (
+  region?: string,
+): Promise<Feature<LineString, CorpusRouteProps>[]> => {
+  // region scopes the read partition. Omitted → all regions (back-compat); the
+  // serving app always passes one, but the seam stays optional for callers/tests.
   const sql = `
     select coalesce(
       jsonb_agg(
@@ -29,6 +31,7 @@ export const getRoutesOverview = async (): Promise<
             'id', id,
             'name', name,
             'source', source,
+            'region', region,
             'distance_km', distance_km,
             'is_loop', is_loop,
             'quality_score', quality_score,
@@ -42,8 +45,13 @@ export const getRoutesOverview = async (): Promise<
     ) as result
     from routes
     where geom is not null
+      ${region !== undefined ? 'and region = $1' : ''}
   `;
-  const { rows } = await query<ResultRow<Feature<LineString, CorpusRouteProps>[]>>(sql);
+  const params = region !== undefined ? [region] : [];
+  const { rows } = await query<ResultRow<Feature<LineString, CorpusRouteProps>[]>>(
+    sql,
+    params,
+  );
   return rows[0].result;
 };
 
@@ -58,6 +66,7 @@ export const getRouteById = async (
         'id', id,
         'name', name,
         'source', source,
+        'region', region,
         'distance_km', distance_km,
         'is_loop', is_loop,
         'quality_score', quality_score,

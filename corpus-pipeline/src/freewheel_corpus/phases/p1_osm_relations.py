@@ -44,6 +44,10 @@ SOURCE = "osm_relation"
 ATTRIBUTION = "© OpenStreetMap contributors, ODbL 1.0"
 MATCH_QUALITY = 1.0
 
+# Slice 1 literal: every row is NY. The RegionProfile abstraction threads this
+# per-region in a later slice (see docs/multi-region-seattle-plan.md §2, §8).
+REGION = "ny"
+
 
 # --- Parsing ---------------------------------------------------------------
 
@@ -174,19 +178,19 @@ def assemble(rel: ParsedRelation) -> geometry.AssemblyResult:
 
 _UPSERT_SQL = """
 INSERT INTO routes (
-    source, source_id, name,
+    region, source, source_id, name,
     geom, start_point, is_loop, distance_km, match_quality,
     osm_way_ids, network, operator, ascent_m, descent_m,
     tags, attribution
 ) VALUES (
-    %(source)s, %(source_id)s, %(name)s,
+    %(region)s, %(source)s, %(source_id)s, %(name)s,
     ST_GeomFromText(%(geom_wkt)s, 4326),
     ST_GeomFromText(%(start_wkt)s, 4326),
     %(is_loop)s, %(distance_km)s, %(match_quality)s,
     %(osm_way_ids)s, %(network)s, %(operator)s, %(ascent_m)s, %(descent_m)s,
     %(tags)s::jsonb, %(attribution)s
 )
-ON CONFLICT (source, source_id) DO UPDATE SET
+ON CONFLICT (region, source, source_id) DO UPDATE SET
     name          = EXCLUDED.name,
     geom          = EXCLUDED.geom,
     start_point   = EXCLUDED.start_point,
@@ -319,6 +323,7 @@ def ingest_relations(
             line = result.line
             start = line.coords[0]
             params = {
+                "region": REGION,
                 "source": SOURCE,
                 "source_id": source_ref,
                 "name": tag_cols["name"],

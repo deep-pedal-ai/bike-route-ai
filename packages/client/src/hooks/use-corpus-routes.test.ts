@@ -35,6 +35,24 @@ describe('useCorpusRoutes', () => {
     );
   });
 
+  it('scopes the request to ?region= when a region is given', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => fixture.routes,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useCorpusRoutes('ny'));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/corpus/routes?region=ny',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   it('sets error and loading false when fetch rejects', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
     vi.stubGlobal('fetch', fetchMock);

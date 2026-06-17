@@ -8,7 +8,7 @@ type UseCorpusRoutesResult = {
   error: Error | null;
 };
 
-export function useCorpusRoutes(): UseCorpusRoutesResult {
+export function useCorpusRoutes(region?: string): UseCorpusRoutesResult {
   const [data, setData] = useState<CorpusRoutesResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
@@ -20,7 +20,13 @@ export function useCorpusRoutes(): UseCorpusRoutesResult {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch('/api/corpus/routes', { signal: controller.signal });
+        // Scope the corpus to one region so a NY view never downloads (or fits
+        // the camera to) another metro's geometry.
+        const url =
+          region === undefined
+            ? '/api/corpus/routes'
+            : `/api/corpus/routes?region=${encodeURIComponent(region)}`;
+        const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) {
           throw new Error('Request failed with status ' + res.status);
         }
@@ -40,7 +46,7 @@ export function useCorpusRoutes(): UseCorpusRoutesResult {
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [region]);
 
   return { data, loading, error };
 }

@@ -50,16 +50,19 @@ OPEN_GPX_SOURCE = "open_gpx"
 ATTRIBUTION_NYSDOT = "NYSDOT State Bike Routes; map-matched via Valhalla (OpenStreetMap, ODbL)"
 ATTRIBUTION_GPX = "Manual GPX; map-matched via Valhalla (© OpenStreetMap contributors, ODbL)"
 
+# Slice 1 literal: every row is NY. RegionProfile threads this later (§2, §8).
+REGION = "ny"
+
 
 # --- DB SQL (Phase 2 needs geom_original + breakdown columns p1 omitted) -----
 
 _UPSERT_SQL = """
 INSERT INTO routes (
-    source, source_id, name,
+    region, source, source_id, name,
     geom, geom_original, start_point, is_loop, distance_km, match_quality,
     surface_breakdown, waytype_breakdown, tags, attribution
 ) VALUES (
-    %(source)s, %(source_id)s, %(name)s,
+    %(region)s, %(source)s, %(source_id)s, %(name)s,
     ST_GeomFromText(%(geom_wkt)s, 4326),
     ST_GeomFromText(%(geom_original_wkt)s, 4326),
     ST_GeomFromText(%(start_wkt)s, 4326),
@@ -67,7 +70,7 @@ INSERT INTO routes (
     %(surface_breakdown)s::jsonb, %(waytype_breakdown)s::jsonb,
     %(tags)s::jsonb, %(attribution)s
 )
-ON CONFLICT (source, source_id) DO UPDATE SET
+ON CONFLICT (region, source, source_id) DO UPDATE SET
     name              = EXCLUDED.name,
     geom              = EXCLUDED.geom,
     geom_original     = EXCLUDED.geom_original,
@@ -147,6 +150,7 @@ def _store_match(
     tags = dict(extra_tags or {})
 
     params = {
+        "region": REGION,
         "source": source,
         "source_id": source_id,
         "name": name,

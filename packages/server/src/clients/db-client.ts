@@ -31,6 +31,7 @@ export function createPgRouteSearchDbClient(
     if (db) {
       return db;
     }
+    console.log('[db] initializing pg pool');
     const newPool = new Pool({ connectionString });
     const newDb = drizzle(newPool);
     pool = newPool;
@@ -47,13 +48,17 @@ export function createPgRouteSearchDbClient(
         .groupBy(routes.embeddingModel);
 
       if (modelRows.length === 0) {
+        console.error('[db] assertEmbeddingModel: no embeddings found in route corpus');
         throw new Error('Route corpus has no embeddings to search');
       }
 
       const models = new Set(modelRows.map((row) => row.embeddingModel));
       if (models.size !== 1 || !models.has(expectedModelId)) {
+        console.error(`[db] assertEmbeddingModel: expected ${expectedModelId}, found`, [...models]);
         throw new Error(`Route corpus embeddings must all use ${expectedModelId}`);
       }
+
+      console.log(`[db] assertEmbeddingModel: OK (${expectedModelId})`);
     },
 
     async findNearestRoutes(
@@ -90,6 +95,7 @@ export function createPgRouteSearchDbClient(
         .orderBy(distance)
         .limit(limit);
 
+      console.log(`[db] findNearestRoutes: ${rows.length} row(s) returned (limit=${limit}, constraints=${JSON.stringify(constraints)})`);
       return rows;
     },
 

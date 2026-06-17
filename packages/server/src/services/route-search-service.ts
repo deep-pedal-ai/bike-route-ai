@@ -106,15 +106,25 @@ function validateRankings(
   const candidateIds = new Set(candidates.map((candidate) => candidate.id));
   const seenIds = new Set<string>();
 
+  if (rankings.length === 0) {
+    console.warn('Route search: rerank returned zero rankings, falling back to default');
+    return fallbackRankings(candidates);
+  }
+
   for (const ranking of rankings) {
-    if (!candidateIds.has(ranking.id) || seenIds.has(ranking.id) || ranking.blurb.trim().length === 0) {
+    if (!candidateIds.has(ranking.id)) {
+      console.warn(`Route search: rerank returned unknown id="${ranking.id}", falling back to default`);
+      return fallbackRankings(candidates);
+    }
+    if (seenIds.has(ranking.id)) {
+      console.warn(`Route search: rerank returned duplicate id="${ranking.id}", falling back to default`);
+      return fallbackRankings(candidates);
+    }
+    if (ranking.blurb.trim().length === 0) {
+      console.warn(`Route search: rerank returned empty blurb for id="${ranking.id}", falling back to default`);
       return fallbackRankings(candidates);
     }
     seenIds.add(ranking.id);
-  }
-
-  if (rankings.length === 0) {
-    return fallbackRankings(candidates);
   }
 
   const rankedIds = new Set(rankings.map((ranking) => ranking.id));

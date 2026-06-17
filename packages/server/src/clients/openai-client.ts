@@ -57,10 +57,15 @@ export function createOpenAIRouteSearchClient(
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
   const chatModel = options.chatModel ?? process.env.OPENAI_CHAT_MODEL ?? DEFAULT_OPENAI_CHAT_MODEL;
   let client: OpenAI | null = null;
+  let modelLogged = false;
 
   function getClient(): OpenAI {
     if (!apiKey) {
       throw new Error('OPENAI_API_KEY is required for route search');
+    }
+    if (!modelLogged) {
+      console.log(`[openai] chat model: ${chatModel}, embedding model: ${EMBEDDING_MODEL_NAME}`);
+      modelLogged = true;
     }
     client ??= new OpenAI({ apiKey });
     return client;
@@ -95,19 +100,28 @@ export function createOpenAIRouteSearchClient(
 
   return {
     async extractConstraints(query: string): Promise<RouteSearchConstraints> {
-      const parsed = await createStructuredJson('route_search_constraints', CONSTRAINT_SCHEMA, [
-        {
-          role: 'system',
-          content:
-            'Extract only hard route-search constraints from the rider query. Convert miles to kilometers. For around/about/approximately distances, use a 15 percent window. For under/less than, set only maxKm. For at least/over/more than, set only minKm. Set isLoop true for loop/circuit/returns-to-start, false for out-and-back or point-to-point, otherwise null. Do not infer elevation, surface, traffic, or difficulty constraints.',
-        },
-        { role: 'user', content: query },
-      ]);
-
-      return parseConstraints(parsed);
+      const t0 = Date.now();
+      let parsed: unknown;
+      try {
+        parsed = await createStructuredJson('route_search_constraints', CONSTRAINT_SCHEMA, [
+          {
+            role: 'system',
+            content:
+              'Extract only hard route-search constraints from the rider query. Convert miles to kilometers. For around/about/approximately distances, use a 15 percent window. For under/less than, set only maxKm. For at least/over/more than, set only minKm. Set isLoop true for loop/circuit/returns-to-start, false for out-and-back or point-to-point, otherwise null. Do not infer elevation, surface, traffic, or difficulty constraints.',
+          },
+          { role: 'user', content: query },
+        ]);
+      } catch (err) {
+        console.error(`[openai] extractConstraints failed (${Date.now() - t0}ms):`, (err as Error).message);
+        throw err;
+      }
+      const constraints = parseConstraints(parsed);
+      console.log(`[openai] extractConstraints (${Date.now() - t0}ms):`, constraints);
+      return constraints;
     },
 
     async embedQuery(query: string): Promise<number[]> {
+      const t0 = Date.now();
       const response = await getClient().embeddings.create({
         model: EMBEDDING_MODEL_NAME,
         input: query,
@@ -116,41 +130,53 @@ export function createOpenAIRouteSearchClient(
       if (!embedding || embedding.length === 0) {
         throw new Error('OpenAI returned an empty embedding');
       }
+      console.log(`[openai] embedQuery (${Date.now() - t0}ms): ${embedding.length} dimensions`);
       return embedding;
     },
 
     async rerank(query: string, candidates: RouteSearchCandidate[]): Promise<RouteSearchRerank[]> {
-      const parsed = await createStructuredJson('route_search_rerank', RERANK_SCHEMA, [
-        {
-          role: 'system',
-          content:
-            'Choose the best route IDs for the rider query from the provided candidates only. Return up to three IDs in best-first order. Write one concise blurb per route explaining the match. You may write prose only; do not invent numbers or facts beyond the candidate JSON.',
-        },
-        {
-          role: 'user',
-          content: JSON.stringify({
-            query,
-            candidates: candidates.map((candidate) => ({
-              id: candidate.id,
-              name: candidate.name,
-              distanceKm: candidate.distanceKm,
-              ascentM: candidate.ascentM,
-              isLoop: candidate.isLoop,
-              qualityScore: candidate.qualityScore,
-              surfaceBreakdown: candidate.surfaceBreakdown,
-              description: candidate.description,
-            })),
-          }),
-        },
-      ]);
-
-      return parseRankings(parsed);
+      const t0 = Date.now();
+      let parsed: unknown;
+      try {
+        parsed = await createStructuredJson('route_search_rerank', RERANK_SCHEMA, [
+          {
+            role: 'system',
+            content:
+              'Choose the best route IDs for the rider query from the provided candidates only. Return up to three IDs in best-first order. Write one concise blurb per route explaining the match. You may write prose only; do not invent numbers or facts beyond the candidate JSON.',
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              query,
+              candidates: candidates.map((candidate) => ({
+                id: candidate.id,
+                name: candidate.name,
+                distanceKm: candidate.distanceKm,
+                ascentM: candidate.ascentM,
+                isLoop: candidate.isLoop,
+                qualityScore: candidate.qualityScore,
+                surfaceBreakdown: candidate.surfaceBreakdown,
+                description: candidate.description,
+              })),
+            }),
+          },
+        ]);
+      } catch (err) {
+        console.error(`[openai] rerank failed (${Date.now() - t0}ms):`, (err as Error).message);
+        throw err;
+      }
+      const rankings = parseRankings(parsed);
+      console.log(
+        `[openai] rerank (${Date.now() - t0}ms): ranked IDs=[${rankings.map((r) => r.id).join(', ')}]`,
+      );
+      return rankings;
     },
   };
 }
 
 function parseConstraints(value: unknown): RouteSearchConstraints {
   if (!isRecord(value)) {
+    console.error('[openai] parseConstraints: unexpected response shape:', JSON.stringify(value));
     throw new Error('OpenAI returned invalid constraints');
   }
 
@@ -168,6 +194,7 @@ function parseConstraints(value: unknown): RouteSearchConstraints {
 
 function parseRankings(value: unknown): RouteSearchRerank[] {
   if (!isRecord(value) || !Array.isArray(value.rankings)) {
+    console.error('[openai] parseRankings: unexpected response shape:', JSON.stringify(value));
     throw new Error('OpenAI returned invalid rankings');
   }
 

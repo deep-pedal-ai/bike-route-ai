@@ -1,0 +1,32 @@
+{
+  "type": "FeatureCollection",
+  "name": "seattle_facility_coverage_draft",
+  "properties": {
+    "draft": true,
+    "coordinate_order": "[lon, lat] RFC 7946",
+    "note": "DRAFT v1 facility-data coverage area for Seattle (Phase 3 facility_coverage_fraction normalization). Mirrors seattle_boundary.geojson for v1 — SDOT bike facilities cover roughly the City of Seattle; the Eastside portion of a route (Mercer Island / Sammamish) has no SDOT facility data and is correctly normalized out by the in-coverage length. Refine this polygon to the true SDOT data extent before a production scoring run."
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {"name": "Seattle facility coverage (DRAFT)"},
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-122.46, 47.48],
+            [-122.43, 47.74],
+            [-122.32, 47.78],
+            [-122.18, 47.76],
+            [-122.05, 47.70],
+            [-122.02, 47.58],
+            [-122.10, 47.48],
+            [-122.22, 47.45],
+            [-122.40, 47.45],
+            [-122.46, 47.48]
+          ]
+        ]
+      }
+    }
+  ]
+}

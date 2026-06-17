@@ -130,15 +130,19 @@ def _breakdowns(edges: list[dict[str, Any]]) -> tuple[dict[str, float], dict[str
     return surface_breakdown, waytype_breakdown, total
 
 
-def match_route(raw: LineString, client: TraceClient) -> MatchResult:
+def match_route(
+    raw: LineString, client: TraceClient, crs: str = geometry.PROJECTED_CRS
+) -> MatchResult:
     """Map-match a raw lon/lat ``LineString`` via Valhalla; return a MatchResult.
 
     Resamples to ~50 m, guards the 200 km cap, calls ``trace_attributes``,
     decodes the snapped shape, computes ``match_quality`` = matched/input, and
     applies the geom / geom_original rule. DB-free — the phase logs + stores.
+    ``crs`` is the region's projected CRS for the resample/length math (default
+    NY UTM 18N); the resample spacing and 200 km cap are true metres in it.
     """
-    resampled = geometry.resample_line(raw, spacing_m=RESAMPLE_SPACING_M)
-    input_km = geometry.line_length_km(resampled)
+    resampled = geometry.resample_line(raw, spacing_m=RESAMPLE_SPACING_M, crs=crs)
+    input_km = geometry.line_length_km(resampled, crs)
 
     # 200 km guard: skip Valhalla entirely, keep raw (DECISIONS.md — no stitch).
     if input_km > MAX_INPUT_KM:

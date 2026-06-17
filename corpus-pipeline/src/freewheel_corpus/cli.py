@@ -13,6 +13,7 @@ import typer
 from freewheel_corpus import db, migrations, stats as stats_module
 from freewheel_corpus.config.settings import Settings
 from freewheel_corpus.embedder import OpenAIEmbedder
+from freewheel_corpus.region_profile import REGIONS, RegionProfile, get_profile
 
 app = typer.Typer(
     help="Freewheel bike-route corpus pipeline.",
@@ -20,9 +21,25 @@ app = typer.Typer(
     add_completion=False,
 )
 
+# Shared --region option: selects the RegionProfile threaded through the phase.
+# Defaults to 'ny' so existing invocations are unchanged.
+_REGION_OPTION = typer.Option(
+    "ny",
+    "--region",
+    help=f"Region to run (one of: {', '.join(sorted(REGIONS))}).",
+)
+
 
 def _settings() -> Settings:
     return Settings()
+
+
+def _resolve_region(region: str) -> RegionProfile:
+    """Resolve a --region key to a RegionProfile, erroring clearly if unknown."""
+    try:
+        return get_profile(region)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 @app.command()
@@ -52,16 +69,18 @@ def phase1(
     no_cache: bool = typer.Option(
         False, "--no-cache", help="Bypass the Overpass disk cache (re-fetch live)."
     ),
+    region: str = _REGION_OPTION,
 ) -> None:
     """Phase 1 — OSM bicycle route relations (WP1)."""
     from freewheel_corpus.clients.overpass import OverpassClient
     from freewheel_corpus.phases import p1_osm_relations as p1
 
     settings = _settings()
+    profile = _resolve_region(region)
     overpass = OverpassClient(base_url=settings.overpass_base_url)
     with db.connect(settings.database_url) as conn:
         db.check_postgis(conn)
-        stats = p1.run(conn, client=overpass, no_cache=no_cache)
+        stats = p1.run(conn, client=overpass, no_cache=no_cache, profile=profile)
 
     typer.echo("Phase 1 — OSM bicycle route relations")
     typer.echo(f"  stored (upserted):   {stats.stored}")
@@ -75,6 +94,7 @@ def phase2(
     no_cache: bool = typer.Option(
         False, "--no-cache", help="Bypass the ArcGIS/Valhalla disk caches (re-fetch live)."
     ),
+    region: str = _REGION_OPTION,
 ) -> None:
     """Phase 2 — loose GPX / polyline sources, map-matched (WP2)."""
     from freewheel_corpus.clients.arcgis import ArcGISClient
@@ -82,12 +102,22 @@ def phase2(
     from freewheel_corpus.phases import p2_loose_gpx as p2
 
     settings = _settings()
-    arcgis = ArcGISClient(base_url=settings.arcgis_base_url)
+    profile = _resolve_region(region)
+    # Phase-2 designated-route ArcGIS host: NY uses settings (NYSDOT /hostingny,
+    # still env-overridable); Seattle's profile carries WSDOT's host.
+    arcgis = ArcGISClient(
+        base_url=profile.arcgis_base_url or settings.arcgis_base_url,
+        layer_path=profile.arcgis_layer_path,
+    )
     valhalla = ValhallaClient(base_url=settings.valhalla_base_url)
     with db.connect(settings.database_url) as conn:
         db.check_postgis(conn)
         results = p2.run(
-            conn, arcgis_client=arcgis, trace_client=valhalla, no_cache=no_cache
+            conn,
+            arcgis_client=arcgis,
+            trace_client=valhalla,
+            no_cache=no_cache,
+            profile=profile,
         )
 
     typer.echo("Phase 2 — loose GPX / polyline sources (map-matched)")
@@ -102,15 +132,18 @@ def phase2(
 @app.command()
 def phase3(
     no_cache: bool = typer.Option(
-        False, "--no-cache", help="Bypass the Socrata disk cache (re-fetch live)."
+        False,
+        "--no-cache",
+        help="Bypass the facility disk cache (Socrata/ArcGIS) and re-fetch live.",
     ),
     reingest_facilities: bool = typer.Option(
         False,
         "--reingest-facilities",
-        help="Force re-ingest of NYC DOT facilities even if they are already "
-        "present (default: skip the slow re-ingest and score against the "
+        help="Force re-ingest of the region's bike facilities even if they are "
+        "already present (default: skip the slow re-ingest and score against the "
         "existing facility_segments).",
     ),
+    region: str = _REGION_OPTION,
 ) -> None:
     """Phase 3 — facility data + quality scoring + cross-source dedup (WP3/WP5).
 
@@ -133,41 +166,56 @@ def phase3(
     (e.g. the dataset changed); the first-ever phase3 (no facilities yet) always
     ingests.
     """
-    from freewheel_corpus.clients.socrata import SocrataClient
     from freewheel_corpus.phases import facility_ingest, p3_quality_scoring
 
     settings = _settings()
-    socrata = SocrataClient(base_url=settings.socrata_base_url)
+    profile = _resolve_region(region)
+    fac_src = profile.facility_source  # FacilitySource: provider + DB source column
     with db.connect(settings.database_url) as conn:
         db.check_postgis(conn)
 
         fac_stats = None
         facilities_ok = False
-        already_present = facility_ingest.has_facilities(conn)
+        already_present = facility_ingest.has_facilities(conn, source=fac_src.source)
 
         if already_present and not reingest_facilities:
             typer.echo(
-                "  NYC DOT facilities already present — skipping re-ingest "
+                f"  {fac_src.source} facilities already present — skipping re-ingest "
                 "(scoring reads them in place; pass --reingest-facilities to "
                 "force a refresh)."
             )
         else:
             try:
-                fc = socrata.fetch_geojson(
-                    facility_ingest.NYC_DOT_DATASET,
-                    where=f"status='{facility_ingest.CURRENT_STATUS}'",
-                    no_cache=no_cache,
-                )
-                fac_stats = facility_ingest.ingest_facilities(conn, fc)
+                if fac_src.provider == "socrata":
+                    from freewheel_corpus.clients.socrata import SocrataClient
+
+                    socrata = SocrataClient(base_url=settings.socrata_base_url)
+                    where = f"{fac_src.status_field}='{fac_src.status_value}'"
+                    fc = socrata.fetch_geojson(
+                        fac_src.dataset, where=where, no_cache=no_cache
+                    )
+                    fac_stats = facility_ingest.ingest_facilities(
+                        conn, fc, profile=profile
+                    )
+                elif fac_src.provider == "arcgis":
+                    fac_stats = facility_ingest.ingest_arcgis_facilities(
+                        conn, fac_src, profile=profile, no_cache=no_cache
+                    )
+                else:  # pragma: no cover - guarded by FacilitySource construction
+                    raise ValueError(
+                        f"unknown facility provider {fac_src.provider!r}"
+                    )
                 facilities_ok = True
             except Exception as exc:
                 conn.rollback()
-                typer.echo(f"  WARNING: NYC DOT facility ingest failed ({exc}); "
-                           f"scoring against existing facility_segments only.")
+                typer.echo(f"  WARNING: {fac_src.source} facility ingest failed "
+                           f"({exc}); scoring against existing facility_segments only.")
                 fac_stats = None
                 facilities_ok = False
 
-        final_stats = p3_quality_scoring.run_final_pass(conn)
+        final_stats = p3_quality_scoring.run_final_pass(
+            conn, facility_source=fac_src.source, profile=profile
+        )
 
     typer.echo("Phase 3 — facility data + quality scoring + cross-source dedup")
     if facilities_ok and fac_stats is not None:
@@ -187,6 +235,7 @@ def phase4(
     generate_only: bool = typer.Option(
         False, "--generate-only", help="Run only scored generation."
     ),
+    region: str = _REGION_OPTION,
 ) -> None:
     """Phase 4 — canon seeding + scored generation (WP4).
 
@@ -201,6 +250,7 @@ def phase4(
     from freewheel_corpus.phases import p4_canon_and_generation as p4
 
     settings = _settings()
+    profile = _resolve_region(region)
     ors = OrsClient(api_key=settings.ors_api_key, base_url=settings.ors_base_url)
     run_canon = not generate_only
     run_generate = not canon_only
@@ -211,9 +261,13 @@ def phase4(
 
         typer.echo("Phase 4 — canon seeding + scored generation")
 
+        fac_source = profile.facility_source.source  # facility_segments.source col
+
         if run_canon:
-            entries = p4.load_canon()
-            cstats = p4.ingest_canon(conn, entries, ors_client=ors, settings=settings)
+            entries = p4.load_canon(profile=profile)
+            cstats = p4.ingest_canon(
+                conn, entries, ors_client=ors, settings=settings, profile=profile
+            )
             typer.echo("  canon:")
             typer.echo(f"    stored:            {cstats.stored}")
             typer.echo(f"    skipped (±25%):    {cstats.skipped_distance}")
@@ -221,7 +275,10 @@ def phase4(
             paused = paused or cstats.quota_paused
 
         if run_generate and not paused:
-            gstats = p4.generate_loops(conn, ors_client=ors, settings=settings)
+            gstats = p4.generate_loops(
+                conn, ors_client=ors, settings=settings,
+                facility_source=fac_source, profile=profile,
+            )
             typer.echo("  generation:")
             typer.echo(f"    kept:              {gstats.kept}")
             typer.echo(f"    rejected (length): {gstats.rejected_length}")
@@ -232,7 +289,9 @@ def phase4(
 
             # Dedup the freshly-generated loops against the rest of the corpus
             # (only generated rows may lose here; the WP5 full pass does the rest).
-            removed = p4.apply_dedup_pass(conn, only_sources=[p4.GENERATED_SOURCE])
+            removed = p4.apply_dedup_pass(
+                conn, only_sources=[p4.GENERATED_SOURCE], profile=profile
+            )
             typer.echo(f"    deduped (removed): {removed}")
 
     if paused:

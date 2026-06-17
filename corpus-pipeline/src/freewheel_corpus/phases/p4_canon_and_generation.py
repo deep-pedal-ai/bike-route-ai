@@ -47,6 +47,7 @@ from shapely.geometry import LineString
 from freewheel_corpus import geometry
 from freewheel_corpus.config.settings import Settings
 from freewheel_corpus.metro import assert_in_metro_bounds
+from freewheel_corpus.region_profile import NY, RegionProfile
 
 PHASE = "phase4"
 
@@ -59,9 +60,6 @@ GENERATED_ATTRIBUTION = (
     "Generated loop on © OpenStreetMap contributors, ODbL; routed via openrouteservice"
 )
 MATCH_QUALITY = 1.0
-
-# Slice 1 literal: every row is NY. RegionProfile threads this later (§2, §8).
-REGION = "ny"
 
 # --- ORS extra_info value-code → human string maps --------------------------
 # ORS encodes surface / waytype / steepness as integer codes in the RLE extras.
@@ -129,16 +127,20 @@ def _value_label(extra_type: str, code: int) -> str:
 # --- RLE extras decode (behavior 1, the mandated tracer bullet) -------------
 
 def decode_rle_extra(
-    coords: list[tuple[float, float]], values: list[list[int]]
+    coords: list[tuple[float, float]],
+    values: list[list[int]],
+    crs: str = geometry.PROJECTED_CRS,
 ) -> dict[int, float]:
     """Decode ORS run-length ``[from_idx, to_idx, value]`` triples → fractions.
 
     ``coords`` is the route geometry as ``(lon, lat)`` tuples (Z already
     stripped). ``values`` is the ORS ``extras.{type}.values`` list: each triple's
     ``from_idx`` / ``to_idx`` are **coordinate indices** into ``coords`` and
-    ``value`` is the integer code for that span. We sum the projected
-    (EPSG:32618) geometric length of ``coords[from..to]`` per value and normalize
-    by the total length, returning ``{value_code -> fraction}`` summing to ~1.0.
+    ``value`` is the integer code for that span. We sum the projected (``crs``,
+    default NY UTM 18N) geometric length of ``coords[from..to]`` per value and
+    normalize by the total length, returning ``{value_code -> fraction}`` summing
+    to ~1.0. (The result is a ratio, so it is near-invariant to the zone, but the
+    CRS is threaded for consistency with the absolute-distance gates.)
 
     Verified against a real captured ORS response: the decoded per-value
     fractions reproduce ORS's own ``extras.{type}.summary[].amount`` percentages.
@@ -147,7 +149,7 @@ def decode_rle_extra(
     if len(coords) < 2 or not values:
         return {}
 
-    projected = geometry.project_to_utm(LineString(coords))
+    projected = geometry.project_to_utm(LineString(coords), crs)
     pcoords = list(projected.coords)
 
     # Cumulative projected length up to each coordinate index.
@@ -174,7 +176,10 @@ def decode_rle_extra(
 
 
 def named_breakdown(
-    extra_type: str, coords: list[tuple[float, float]], values: list[list[int]]
+    extra_type: str,
+    coords: list[tuple[float, float]],
+    values: list[list[int]],
+    crs: str = geometry.PROJECTED_CRS,
 ) -> dict[str, float]:
     """Decode an RLE extra and map value CODES to their human string keys.
 
@@ -183,7 +188,7 @@ def named_breakdown(
     consumed by the Phase-3 ``surface_quality`` scorer. Codes that collide on the
     same string (rare) are summed.
     """
-    coded = decode_rle_extra(coords, values)
+    coded = decode_rle_extra(coords, values, crs)
     named: dict[str, float] = {}
     for code, fraction in coded.items():
         key = _value_label(extra_type, code)
@@ -193,28 +198,32 @@ def named_breakdown(
 
 # --- Coordinate helper: [lat,lon] (YAML) → [lon,lat] (code) + guard (Q5) -----
 
-def latlon_to_lonlat(latlon: list[float] | tuple[float, float]) -> tuple[float, float]:
+def latlon_to_lonlat(
+    latlon: list[float] | tuple[float, float], profile: RegionProfile = NY
+) -> tuple[float, float]:
     """Swap a human ``[lat, lon]`` (canon.yaml) into code ``(lon, lat)`` (Q5).
 
-    This is the ONE place the coordinate order flips. The metro-bounds guard
+    This is the ONE place the coordinate order flips. The region-bounds guard
     (:func:`freewheel_corpus.metro.assert_in_metro_bounds`) runs on the result so
     a transposed coordinate — the single highest-risk bug class in this pipeline
-    — raises loudly rather than routing into the ocean.
+    — raises loudly rather than routing into the ocean. ``profile`` selects the
+    region whose bounds box applies (default NY).
     """
     lat, lon = float(latlon[0]), float(latlon[1])
-    assert_in_metro_bounds(lon, lat)
+    assert_in_metro_bounds(lon, lat, profile)
     return (lon, lat)
 
 
 def latlon_list_to_lonlat(
-    waypoints: list[list[float]] | list[tuple[float, float]]
+    waypoints: list[list[float]] | list[tuple[float, float]],
+    profile: RegionProfile = NY,
 ) -> list[tuple[float, float]]:
     """Convert a list of human ``[lat, lon]`` waypoints to ``(lon, lat)`` tuples.
 
-    Every waypoint is bounds-checked; a single out-of-metro point fails the whole
-    conversion (one bad coordinate poisons the route).
+    Every waypoint is bounds-checked against ``profile``; a single out-of-region
+    point fails the whole conversion (one bad coordinate poisons the route).
     """
-    return [latlon_to_lonlat(wp) for wp in waypoints]
+    return [latlon_to_lonlat(wp, profile) for wp in waypoints]
 
 
 # --- ORS directions GeoJSON → parsed route ----------------------------------
@@ -241,13 +250,16 @@ class ParsedRoute:
     steepness_breakdown: dict[str, float] = field(default_factory=dict)
 
 
-def parse_ors_feature(feature_collection: dict[str, Any]) -> ParsedRoute:
+def parse_ors_feature(
+    feature_collection: dict[str, Any], crs: str = geometry.PROJECTED_CRS
+) -> ParsedRoute:
     """Parse an ORS directions GeoJSON FeatureCollection into a :class:`ParsedRoute`.
 
     ORS returns ``geometry.coordinates`` as ``[lon, lat, ele]`` 3-tuples when
     ``elevation=true``; the Z is stripped for the 2D ``routes.geom`` column. The
     RLE extras under ``properties.extras.{surface,waytype,steepness}`` are decoded
-    into fractional breakdowns; a missing extra yields an empty breakdown.
+    into fractional breakdowns (in ``crs``, default NY); a missing extra yields an
+    empty breakdown.
     """
     feature = feature_collection["features"][0]
     coords3d = feature["geometry"]["coordinates"]
@@ -263,7 +275,7 @@ def parse_ors_feature(feature_collection: dict[str, Any]) -> ParsedRoute:
         block = extras.get(extra_type)
         if not block or not block.get("values"):
             return {}
-        return named_breakdown(extra_type, coords2d, block["values"])
+        return named_breakdown(extra_type, coords2d, block["values"], crs)
 
     return ParsedRoute(
         line=LineString(coords2d),
@@ -281,14 +293,17 @@ def parse_ors_feature(feature_collection: dict[str, Any]) -> ParsedRoute:
 _DEFAULT_CANON_PATH = Path(__file__).resolve().parents[1] / "config" / "canon.yaml"
 
 
-def load_canon(path: Path | str | None = None) -> list[dict[str, Any]]:
-    """Load the canon DRAFT rides from ``config/canon.yaml`` (the ``rides`` list).
+def load_canon(
+    path: Path | str | None = None, profile: RegionProfile = NY
+) -> list[dict[str, Any]]:
+    """Load the canon DRAFT rides from the region's canon file (the ``rides`` list).
 
-    Coordinates stay in human ``[lat, lon]`` here; the swap to code ``[lon, lat]``
-    happens later in :func:`latlon_to_lonlat` (Q5 — one place). A missing file or
-    empty ``rides`` returns an empty list.
+    Defaults to ``profile.canon_path`` (NY = ``config/canon.yaml``). Coordinates
+    stay in human ``[lat, lon]`` here; the swap to code ``[lon, lat]`` happens
+    later in :func:`latlon_to_lonlat` (Q5 — one place). A missing file or empty
+    ``rides`` returns an empty list.
     """
-    canon_path = Path(path) if path is not None else _DEFAULT_CANON_PATH
+    canon_path = Path(path) if path is not None else Path(profile.canon_path)
     if not canon_path.exists():
         return []
     data = yaml.safe_load(canon_path.read_text()) or {}
@@ -407,6 +422,7 @@ def ingest_canon(
     *,
     ors_client: Any,
     settings: Settings | None = None,
+    profile: RegionProfile = NY,
 ) -> CanonStats:
     """Route + ingest canon entries (per variant), gated by the ±25% distance check.
 
@@ -429,6 +445,7 @@ def ingest_canon(
 
     s = settings or Settings()
     tolerance = s.canon_distance_tolerance
+    crs = profile.projected_crs
     stats = CanonStats()
 
     with conn.cursor() as cur:
@@ -437,8 +454,8 @@ def ingest_canon(
             for vslug, vname, vexpected, vwps, voab in _iter_variants(entry):
                 # Build the [lon, lat] coordinate list (guarded swap).
                 try:
-                    start = latlon_to_lonlat(start_latlon)
-                    waypoints = latlon_list_to_lonlat(vwps)
+                    start = latlon_to_lonlat(start_latlon, profile)
+                    waypoints = latlon_list_to_lonlat(vwps, profile)
                 except Exception as exc:  # bounds guard → bad DRAFT coord
                     stats.skipped_distance += 1  # treat as a skip, not a crash
                     _log(
@@ -484,7 +501,7 @@ def ingest_canon(
                     )
                     continue
 
-                parsed = parse_ors_feature(fc)
+                parsed = parse_ors_feature(fc, crs)
 
                 if not _within_tolerance(parsed.distance_km, vexpected, tolerance):
                     stats.skipped_distance += 1
@@ -510,13 +527,13 @@ def ingest_canon(
                 startpt = line.coords[0]
                 tags = {"out_and_back": voab, "variant": vname}
                 params = {
-                    "region": REGION,
+                    "region": profile.key,
                     "source": CANON_SOURCE,
                     "source_id": vslug,
                     "name": f"{entry.get('name', entry['slug'])} ({vname})",
                     "geom_wkt": line.wkt,
                     "start_wkt": f"POINT({startpt[0]} {startpt[1]})",
-                    "is_loop": geometry.is_loop(line),
+                    "is_loop": geometry.is_loop(line, crs),
                     "distance_km": parsed.distance_km,
                     "match_quality": MATCH_QUALITY,
                     "ascent_m": parsed.ascent_m,
@@ -576,25 +593,28 @@ def _precedence_winner(
     return (a, b) if a[0] <= b[0] else (b, a)
 
 
-def routes_overlap_either(a: LineString, b: LineString) -> bool:
+def routes_overlap_either(
+    a: LineString, b: LineString, crs: str = geometry.PROJECTED_CRS
+) -> bool:
     """Symmetric wrapper over the (asymmetric) overlap predicate.
 
     ``geometry.routes_overlap`` buffers only its first argument, so it is not
     symmetric. For dedup we want "these two are the same ride" regardless of
     order, so we buffer the LONGER route (the more reliable container) and also
     test the reverse — either direction exceeding the threshold means duplicate.
+    ``crs`` is the region's projected CRS for the buffer/overlap math (default NY).
     """
-    pa = geometry.project_to_utm(a)
-    pb = geometry.project_to_utm(b)
+    pa = geometry.project_to_utm(a, crs)
+    pb = geometry.project_to_utm(b, crs)
     longer, shorter = (a, b) if pa.length >= pb.length else (b, a)
-    return geometry.routes_overlap(longer, shorter) or geometry.routes_overlap(
-        shorter, longer
+    return geometry.routes_overlap(longer, shorter, crs) or geometry.routes_overlap(
+        shorter, longer, crs
     )
 
 
 _DEDUP_LOAD_SQL = (
     "SELECT id, source, ST_AsBinary(geom) AS geom FROM routes "
-    "WHERE geom IS NOT NULL ORDER BY id"
+    "WHERE geom IS NOT NULL AND region = %(region)s ORDER BY id"
 )
 _DELETE_SQL = "DELETE FROM routes WHERE id = %(id)s"
 
@@ -604,6 +624,7 @@ def apply_dedup_pass(
     *,
     only_sources: list[str] | None = None,
     length_ratio_min: float | None = None,
+    profile: RegionProfile = NY,
 ) -> int:
     """Full-table cross-source dedup: pair overlapping routes, keep the
     higher-precedence one, HARD-DELETE the loser, log both IDs (ADR-0003).
@@ -641,9 +662,10 @@ def apply_dedup_pass(
 
     if length_ratio_min is None:
         length_ratio_min = Settings().dedup_length_ratio_min
+    crs = profile.projected_crs
 
     with conn.cursor() as load_cur, conn.cursor() as work_cur:
-        load_cur.execute(_DEDUP_LOAD_SQL)
+        load_cur.execute(_DEDUP_LOAD_SQL, {"region": profile.key})
         rows = [
             (rid, source, wkb.loads(bytes(geom_wkb)))
             for rid, source, geom_wkb in load_cur.fetchall()
@@ -662,9 +684,9 @@ def apply_dedup_pass(
                 # WP5 length-ratio guard (cheap-first): two routes merge only if
                 # they are similar length. A short ride inside a long corridor has
                 # ratio << 1 → skipped here, so it can never be deleted as a "dup".
-                if geometry.length_ratio(geom_a, geom_b) < length_ratio_min:
+                if geometry.length_ratio(geom_a, geom_b, crs) < length_ratio_min:
                     continue
-                if not routes_overlap_either(geom_a, geom_b):
+                if not routes_overlap_either(geom_a, geom_b, crs):
                     continue
 
                 winner, loser = _precedence_winner((id_a, src_a), (id_b, src_b))
@@ -791,7 +813,8 @@ RETURNING id
 """
 
 _EXISTING_GEOMS_SQL = (
-    "SELECT id, ST_AsBinary(geom) AS geom FROM routes WHERE geom IS NOT NULL"
+    "SELECT id, ST_AsBinary(geom) AS geom FROM routes "
+    "WHERE geom IS NOT NULL AND region = %(region)s"
 )
 
 
@@ -803,6 +826,7 @@ def _score_candidate(
     coverage,
     facility_source: str,
     settings: Settings,
+    crs: str = geometry.PROJECTED_CRS,
 ) -> tuple[float, float, float, float]:
     """Inline Phase-3 score for a candidate (reuses the p3 pure scorer + query).
 
@@ -814,9 +838,9 @@ def _score_candidate(
     from freewheel_corpus.phases import p3_quality_scoring as p3
 
     by_class = p3._facilities_near(cur, line, source=facility_source)
-    cov = p3.facility_coverage_fraction(line, coverage)
-    prot = p3.protected_lane_fraction_in_coverage(line, by_class, coverage)
-    grn = p3.greenway_fraction_in_coverage(line, by_class, coverage)
+    cov = p3.facility_coverage_fraction(line, coverage, crs)
+    prot = p3.protected_lane_fraction_in_coverage(line, by_class, coverage, crs)
+    grn = p3.greenway_fraction_in_coverage(line, by_class, coverage, crs)
     surf = p3.surface_quality(surface_breakdown, settings)
     q = p3.quality_score(
         protected_lane_fraction=prot,
@@ -838,6 +862,7 @@ def generate_loops(
     facility_source: str = "nyc_dot",
     coverage_geojson: dict[str, Any] | None = None,
     settings: Settings | None = None,
+    profile: RegionProfile = NY,
 ) -> GenerationStats:
     """Generate round-trip loops, score them inline, keep only the gated winners.
 
@@ -858,14 +883,19 @@ def generate_loops(
     from freewheel_corpus.phases import p3_quality_scoring as p3
 
     s = settings or Settings()
-    seed_points = seed_points if seed_points is not None else GENERATION_SEED_POINTS
+    crs = profile.projected_crs
+    seed_points = (
+        seed_points
+        if seed_points is not None
+        else [tuple(p) for p in profile.generation_seed_points]
+    )
     target_lengths_m = (
         target_lengths_m
         if target_lengths_m is not None
         else [km * 1000 for km in GENERATION_TARGET_KM]
     )
     seeds = seeds if seeds is not None else GENERATION_SEEDS
-    coverage = p3.load_coverage(coverage_geojson)
+    coverage = p3.load_coverage(coverage_geojson, profile)
     tol = s.generation_length_tolerance
     min_q = s.min_quality_score
 
@@ -877,7 +907,7 @@ def generate_loops(
         # Load existing geometries once for the duplicate check (kept loops are
         # appended to this in-memory list so two new loops can't both survive as
         # duplicates of each other).
-        cur.execute(_EXISTING_GEOMS_SQL)
+        cur.execute(_EXISTING_GEOMS_SQL, {"region": profile.key})
         existing: list[LineString] = [
             wkb.loads(bytes(g)) for _, g in cur.fetchall()
         ]
@@ -911,14 +941,14 @@ def generate_loops(
                              message=f"ORS round_trip failed for {source_id}: {exc}")
                         continue
 
-                    parsed = parse_ors_feature(fc)
+                    parsed = parse_ors_feature(fc, crs)
                     line = parsed.line
 
                     # Score it inline (always, so rejects carry a score).
                     prot, grn, cov, q = _score_candidate(
                         work_cur, line, parsed.surface_breakdown,
                         coverage=coverage, facility_source=facility_source,
-                        settings=s,
+                        settings=s, crs=crs,
                     )
                     score_detail = {
                         "quality_score": round(q, 4),
@@ -952,7 +982,7 @@ def generate_loops(
                         continue
 
                     # Gate 3: duplicate of an existing (or already-kept) route.
-                    if any(routes_overlap_either(line, ex) for ex in existing):
+                    if any(routes_overlap_either(line, ex, crs) for ex in existing):
                         stats.rejected_duplicate += 1
                         _log(work_cur, source=GENERATED_SOURCE,
                              event_type="generation_reject_duplicate",
@@ -965,13 +995,13 @@ def generate_loops(
                     startpt = line.coords[0]
                     tags = {"seed_point_index": sp_idx, "target_km": target_km, "seed": seed}
                     params = {
-                        "region": REGION,
+                        "region": profile.key,
                         "source": GENERATED_SOURCE,
                         "source_id": source_id,
                         "name": f"Generated loop {int(target_km)} km (seed {seed}) #{sp_idx}",
                         "geom_wkt": line.wkt,
                         "start_wkt": f"POINT({startpt[0]} {startpt[1]})",
-                        "is_loop": geometry.is_loop(line),
+                        "is_loop": geometry.is_loop(line, crs),
                         "distance_km": parsed.distance_km,
                         "match_quality": MATCH_QUALITY,
                         "ascent_m": parsed.ascent_m,

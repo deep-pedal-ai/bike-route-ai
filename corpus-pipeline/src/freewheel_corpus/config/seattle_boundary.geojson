@@ -1,0 +1,26 @@
+{
+  "type": "Feature",
+  "properties": {
+    "name": "Freewheel Seattle / Puget Sound query/clip boundary (DRAFT)",
+    "draft": true,
+    "coordinate_order": "[lon, lat] (RFC 7946) — the OPPOSITE of seattle_canon.yaml's [lat, lon]",
+    "note": "DRAFT clip polygon covering Seattle + the Eastside (Mercer Island, Bellevue/Redmond as far as the Sammamish River Trail) + Lake Washington + Shoreline/Lake Forest Park to the north. Every vertex lies within the Seattle bounds guard (lat 47.0-48.0, lon -122.6..-121.8). This is the QUERY/CLIP boundary, not the routing extent — a self-hosted ORS/Valhalla graph must cover the bbox of ALL stored route geometry, which can extend beyond this polygon. Verify against the chosen canon ride extents before a production run."
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [-122.46, 47.48],
+        [-122.43, 47.74],
+        [-122.32, 47.78],
+        [-122.18, 47.76],
+        [-122.05, 47.70],
+        [-122.02, 47.58],
+        [-122.10, 47.48],
+        [-122.22, 47.45],
+        [-122.40, 47.45],
+        [-122.46, 47.48]
+      ]
+    ]
+  }
+}

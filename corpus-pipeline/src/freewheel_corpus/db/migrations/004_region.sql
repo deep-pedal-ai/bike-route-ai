@@ -1,4 +1,10 @@
--- Migration 003 — region partition key (multi-region corpus, Slice 1).
+-- Migration 004 — region partition key (multi-region corpus, Slice 1).
+--
+-- NOTE: renumbered 003 -> 004. The live freewheel-corpus DB already applied a
+-- DIFFERENT migration 003 (003_pois.sql, the POI feature, from the
+-- point-of-interest-enrichment branch) out-of-band. Both features independently
+-- claimed slot 003; this one moved to 004 so the ledger stays consistent and
+-- this migration stacks cleanly on top of 003_pois on the existing DB.
 --
 -- Introduces `region` as the read partition key end-to-end. The serving app
 -- scopes the routes query, the initial camera, the facility bbox, and the

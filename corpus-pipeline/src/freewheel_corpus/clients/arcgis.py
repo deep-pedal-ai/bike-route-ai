@@ -78,13 +78,17 @@ class ArcGISClient:
         cache: DiskCache | None = None,
         *,
         base_url: str = "https://gisportalny.dot.ny.gov/hostingny/rest/services",
+        layer_path: str = LAYER_PATH,
         transport: Transport | None = None,
         timeout: float = 120.0,
         page_size: int = PAGE_SIZE,
     ) -> None:
+        # ``layer_path`` is region-specific (RegionProfile.arcgis_layer_path):
+        # NYSDOT State Bike Routes for NY, WSDOT designated routes for Seattle.
+        # Defaults to the NY layer so existing callers are unchanged.
         self.cache = cache if cache is not None else DiskCache()
         self.base_url = base_url
-        self.query_url = base_url.rstrip("/") + "/" + LAYER_PATH
+        self.query_url = base_url.rstrip("/") + "/" + layer_path
         self._transport = transport or _http_transport(timeout)
         self.page_size = page_size
 

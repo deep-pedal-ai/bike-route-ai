@@ -15,7 +15,7 @@ EXPECTED_MIGRATIONS = [
     "001_init.sql",
     "002_embeddings.sql",
     "003_pois.sql",
-    "003_region.sql",
+    "004_region.sql",
 ]
 
 

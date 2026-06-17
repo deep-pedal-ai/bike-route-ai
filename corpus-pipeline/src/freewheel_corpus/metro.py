@@ -1,16 +1,21 @@
 """Metro boundary loader + the metro-bounds safety guard.
 
-The boundary polygon (``config/metro_boundary.geojson``) is stored in GeoJSON
-``[lon, lat]`` order per RFC 7946 — the OPPOSITE of ``canon.yaml``'s human
-``[lat, lon]`` order. Coordinate-order bugs are the highest-risk class in this
-pipeline, so every coordinate that flows through here is checked against the
-metro bounds (lat 40-42, lon -75..-73): a transposition lands outside the box
-and fails LOUDLY rather than silently querying / routing the wrong region.
+The boundary polygon is stored in GeoJSON ``[lon, lat]`` order per RFC 7946 — the
+OPPOSITE of ``canon.yaml``'s human ``[lat, lon]`` order. Coordinate-order bugs are
+the highest-risk class in this pipeline, so every coordinate that flows through
+here is checked against the region's bounds box: a transposition lands outside the
+box and fails LOUDLY rather than silently querying / routing the wrong region.
+
+Multi-region (Slice 2): the bounds box and boundary file are no longer hardcoded
+NY constants — they come from a :class:`~freewheel_corpus.region_profile.RegionProfile`
+(default :data:`~freewheel_corpus.region_profile.NY`, so existing NY callers are
+unchanged). This module is now a thin convenience wrapper over the profile, kept
+because ``clients/arcgis.py`` and the phases import these names.
 
 NOTE FOR LATER PHASES: a self-hosted ORS / Valhalla graph extract must cover the
 bbox of ALL stored route geometry (canon rides, generated loops, map-matched
-NYSDOT segments can extend beyond this hand-drawn polygon) — NOT merely this
-boundary. This polygon is the *query/clip* boundary, not the routing extent.
+segments can extend beyond this hand-drawn polygon) — NOT merely this boundary.
+This polygon is the *query/clip* boundary, not the routing extent.
 """
 
 from __future__ import annotations
@@ -21,49 +26,44 @@ from pathlib import Path
 from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
 
-_BOUNDARY_PATH = Path(__file__).parent / "config" / "metro_boundary.geojson"
+from freewheel_corpus.region_profile import NY, RegionBoundsError, RegionProfile
 
-# Metro-bounds guard (PLAN Q5 / §WP0). Generous box around the coverage area.
-LAT_MIN, LAT_MAX = 40.0, 42.0
-LON_MIN, LON_MAX = -75.0, -73.0
+# Back-compat alias: callers/tests catch ``MetroBoundsError``; it is now the same
+# class the region profile raises, so a profile-raised error is still caught.
+MetroBoundsError = RegionBoundsError
+
+# Back-compat constants (NY): some code/tests still reference the bare box. They
+# point at the NY profile so there is a single source of truth.
+LAT_MIN, LAT_MAX = NY.lat_min, NY.lat_max
+LON_MIN, LON_MAX = NY.lon_min, NY.lon_max
 
 
-class MetroBoundsError(ValueError):
-    """Raised when a coordinate falls outside the metro bounds (likely a
-    transposed [lat, lon] / [lon, lat] swap)."""
-
-
-def assert_in_metro_bounds(lon: float, lat: float) -> None:
-    """Assert a ``(lon, lat)`` point lies within the metro bounds.
+def assert_in_metro_bounds(lon: float, lat: float, profile: RegionProfile = NY) -> None:
+    """Assert a ``(lon, lat)`` point lies within ``profile``'s bounds (default NY).
 
     Coordinates are in code order: longitude first, latitude second.
     """
-    if not (LON_MIN <= lon <= LON_MAX and LAT_MIN <= lat <= LAT_MAX):
-        raise MetroBoundsError(
-            f"Coordinate (lon={lon}, lat={lat}) is outside the metro bounds "
-            f"(lat {LAT_MIN}..{LAT_MAX}, lon {LON_MIN}..{LON_MAX}). This usually "
-            f"means a transposed [lat, lon] / [lon, lat] swap — check coordinate order."
-        )
+    profile.assert_in_bounds(lon, lat)
 
 
-def load_metro_boundary() -> BaseGeometry:
-    """Load the metro boundary polygon (GeoJSON [lon, lat]) as a shapely shape.
+def load_metro_boundary(profile: RegionProfile = NY) -> BaseGeometry:
+    """Load ``profile``'s clip polygon (GeoJSON [lon, lat]) as a shapely shape.
 
-    Validates that the polygon is geometrically valid and that every vertex
-    lands within the metro bounds, so a malformed or transposed boundary fails
-    at load time rather than silently mis-clipping every source.
+    Validates that the polygon is geometrically valid and that every vertex lands
+    within the region bounds, so a malformed or transposed boundary fails at load
+    time rather than silently mis-clipping every source.
     """
-    data = json.loads(_BOUNDARY_PATH.read_text())
+    data = json.loads(Path(profile.boundary_path).read_text())
     geom = shape(data["geometry"])
 
     if not geom.is_valid:
         raise ValueError(
-            f"metro_boundary.geojson is not a valid polygon: "
+            f"{profile.boundary_path.name} is not a valid polygon: "
             f"{geom.is_valid_reason if hasattr(geom, 'is_valid_reason') else 'invalid'}"
         )
 
     # Every boundary vertex must be in-bounds (catches a transposed file).
     for lon, lat in geom.exterior.coords:
-        assert_in_metro_bounds(lon, lat)
+        profile.assert_in_bounds(lon, lat)
 
     return geom

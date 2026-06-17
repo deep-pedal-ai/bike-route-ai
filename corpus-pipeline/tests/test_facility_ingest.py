@@ -13,6 +13,7 @@ from shapely.geometry import LineString, mapping
 
 from freewheel_corpus import migrations
 from freewheel_corpus.phases import facility_ingest
+from freewheel_corpus.region_profile import SEATTLE
 
 
 # --- pure normalization ------------------------------------------------------
@@ -106,3 +107,91 @@ def test_ingest_is_idempotent(clean_db):
     with clean_db.cursor() as cur:
         cur.execute("SELECT count(*) FROM facility_segments")
         assert cur.fetchone()[0] == 2
+
+
+# --- SDOT / Seattle ArcGIS ingest (region='seattle', source='sdot') ----------
+
+def _sdot_feat(compkey, *, category=None, current_status="INSVC"):
+    props = {"COMPKEY": compkey, "OBJECTID": compkey}
+    if category is not None:
+        props["CATEGORY"] = category
+    if current_status is not None:
+        props["CURRENT_STATUS"] = current_status
+    return {
+        "type": "Feature",
+        "properties": props,
+        "geometry": mapping(LineString([(-122.34, 47.62), (-122.33, 47.62)])),
+    }
+
+
+def _fake_arcgis_factory(pages_by_layer):
+    """Build a client_factory that returns canned features per layer_path."""
+    class _FakeClient:
+        def __init__(self, *, base_url, layer_path):
+            self.layer_path = layer_path
+
+        def fetch_all_features(self, *, no_cache=False):
+            return pages_by_layer.get(self.layer_path, [])
+
+    return _FakeClient
+
+
+def test_sdot_arcgis_ingest_classes_filters_and_partitions(clean_db):
+    """Layer 2 features are CATEGORY-classed + INSVC-filtered; layer-1 features all
+    map to greenway; rows land as source='sdot', region='seattle', borough NULL."""
+    migrations.run_migrations(clean_db)
+    clean_db.commit()
+
+    fs = SEATTLE.facility_source
+    layer2_path, layer1_path = fs.layers[0].layer_path, fs.layers[1].layer_path
+    pages = {
+        layer2_path: [
+            _sdot_feat(10, category="BKF-PBL"),                       # protected
+            _sdot_feat(11, category="BKF-NGW"),                       # sharrow (decision)
+            _sdot_feat(12, category="BKF-OFFST"),                     # greenway (decision)
+            _sdot_feat(13, category="ZZZ"),                           # other (+warning)
+            _sdot_feat(14, category="BKF-PBL", current_status="UNDERCONS"),  # filtered
+        ],
+        layer1_path: [
+            _sdot_feat(20, category=None),                            # greenway (fixed)
+            _sdot_feat(21, category=None),                            # greenway (fixed)
+        ],
+    }
+
+    stats = facility_ingest.ingest_arcgis_facilities(
+        clean_db, fs, profile=SEATTLE,
+        client_factory=_fake_arcgis_factory(pages),
+    )
+
+    assert stats.stored == 6        # 4 from layer2 (one UNDERCONS filtered) + 2 trails
+    assert stats.skipped_retired == 1
+    assert stats.unknown_classes == 1
+    assert stats.by_class == {
+        "protected": 1, "sharrow": 1, "greenway": 3, "other": 1,
+    }
+
+    with clean_db.cursor() as cur:
+        cur.execute(
+            "SELECT source, region, GeometryType(geom), borough "
+            "FROM facility_segments"
+        )
+        rows = cur.fetchall()
+    assert all(r[0] == "sdot" for r in rows)
+    assert all(r[1] == "seattle" for r in rows)
+    assert all(r[2] == "MULTILINESTRING" for r in rows)
+    assert all(r[3] is None for r in rows)  # no SDOT borough analog
+
+
+def test_sdot_arcgis_ingest_is_idempotent(clean_db):
+    migrations.run_migrations(clean_db)
+    clean_db.commit()
+    fs = SEATTLE.facility_source
+    pages = {fs.layers[0].layer_path: [_sdot_feat(1, category="BKF-BL")]}
+    factory = _fake_arcgis_factory(pages)
+
+    facility_ingest.ingest_arcgis_facilities(clean_db, fs, profile=SEATTLE, client_factory=factory)
+    facility_ingest.ingest_arcgis_facilities(clean_db, fs, profile=SEATTLE, client_factory=factory)
+
+    with clean_db.cursor() as cur:
+        cur.execute("SELECT count(*) FROM facility_segments WHERE source = 'sdot'")
+        assert cur.fetchone()[0] == 1

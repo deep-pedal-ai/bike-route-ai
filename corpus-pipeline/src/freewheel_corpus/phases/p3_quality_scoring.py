@@ -43,6 +43,7 @@ from shapely.ops import unary_union
 
 from freewheel_corpus import geometry
 from freewheel_corpus.config.settings import Settings
+from freewheel_corpus.region_profile import NY, RegionProfile
 
 PHASE = "phase3"
 
@@ -81,21 +82,23 @@ GREENWAY_CLASSES = ("greenway",)
 
 # --- Pure facility-proximity fractions --------------------------------------
 
-def facility_fraction(route: LineString, facility: BaseGeometry | None) -> float:
+def facility_fraction(
+    route: LineString, facility: BaseGeometry | None, crs: str = geometry.PROJECTED_CRS
+) -> float:
     """Fraction of ``route`` length within 15 m of ``facility`` (projected).
 
-    Both geometries are projected to EPSG:32618; the facility is buffered by
-    :data:`~freewheel_corpus.geometry.FACILITY_PROXIMITY_M` metres and intersected
-    with the route. Returns ``length(route ∩ buffer) / length(route)`` in [0, 1].
-    A ``None`` / empty facility (no segments of that class) yields 0.0.
+    Both geometries are projected to ``crs`` (default NY EPSG:32618); the facility
+    is buffered by :data:`~freewheel_corpus.geometry.FACILITY_PROXIMITY_M` metres
+    and intersected with the route. Returns ``length(route ∩ buffer) /
+    length(route)`` in [0, 1]. A ``None`` / empty facility yields 0.0.
     """
     if facility is None or facility.is_empty:
         return 0.0
-    proute = geometry.project_to_utm(route)
+    proute = geometry.project_to_utm(route, crs)
     total = proute.length
     if total == 0:
         return 0.0
-    pfac = geometry.project_to_utm(facility)
+    pfac = geometry.project_to_utm(facility, crs)
     covered = pfac.buffer(geometry.FACILITY_PROXIMITY_M).intersection(proute).length
     return min(covered / total, 1.0)
 
@@ -114,7 +117,9 @@ def _union_of_classes(
 
 
 def protected_lane_fraction(
-    route: LineString, by_class: dict[str, BaseGeometry]
+    route: LineString,
+    by_class: dict[str, BaseGeometry],
+    crs: str = geometry.PROJECTED_CRS,
 ) -> float:
     """Fraction of ``route`` within 15 m of a ``protected`` OR ``greenway`` segment.
 
@@ -122,41 +127,54 @@ def protected_lane_fraction(
     that class's segments near the route. Greenways count here (and again in
     :func:`greenway_fraction`) — intended per the weighted formula.
     """
-    return facility_fraction(route, _union_of_classes(by_class, PROTECTED_CLASSES))
+    return facility_fraction(
+        route, _union_of_classes(by_class, PROTECTED_CLASSES), crs
+    )
 
 
-def greenway_fraction(route: LineString, by_class: dict[str, BaseGeometry]) -> float:
+def greenway_fraction(
+    route: LineString,
+    by_class: dict[str, BaseGeometry],
+    crs: str = geometry.PROJECTED_CRS,
+) -> float:
     """Fraction of ``route`` within 15 m of a ``greenway`` segment (greenway only)."""
-    return facility_fraction(route, _union_of_classes(by_class, GREENWAY_CLASSES))
+    return facility_fraction(route, _union_of_classes(by_class, GREENWAY_CLASSES), crs)
 
 
 # --- Coverage-area normalization --------------------------------------------
 
-def _in_coverage(route: LineString, coverage: BaseGeometry) -> BaseGeometry:
+def _in_coverage(
+    route: LineString, coverage: BaseGeometry, crs: str = geometry.PROJECTED_CRS
+) -> BaseGeometry:
     """The part of ``route`` inside ``coverage`` (projected), possibly multi/empty."""
-    proute = geometry.project_to_utm(route)
-    pcov = geometry.project_to_utm(coverage)
+    proute = geometry.project_to_utm(route, crs)
+    pcov = geometry.project_to_utm(coverage, crs)
     return proute.intersection(pcov)
 
 
-def facility_coverage_fraction(route: LineString, coverage: BaseGeometry) -> float:
+def facility_coverage_fraction(
+    route: LineString, coverage: BaseGeometry, crs: str = geometry.PROJECTED_CRS
+) -> float:
     """Fraction of ``route`` length that lies inside the facility-data ``coverage``.
 
-    ``coverage`` is the NYC 5-borough polygon (``config/nyc_coverage.geojson``).
-    A route fully inside → 1.0; fully outside → 0.0; straddling → the in-coverage
-    fraction. This is the denominator used to normalize the facility fractions,
-    so out-of-coverage portions (no NYC DOT data) don't dilute the score.
+    ``coverage`` is the region's coverage polygon. A route fully inside → 1.0;
+    fully outside → 0.0; straddling → the in-coverage fraction. This is the
+    denominator used to normalize the facility fractions, so out-of-coverage
+    portions (no facility data) don't dilute the score.
     """
-    proute = geometry.project_to_utm(route)
+    proute = geometry.project_to_utm(route, crs)
     total = proute.length
     if total == 0:
         return 0.0
-    inside = _in_coverage(route, coverage)
+    inside = _in_coverage(route, coverage, crs)
     return min(inside.length / total, 1.0)
 
 
 def _fraction_in_coverage(
-    route: LineString, facility: BaseGeometry | None, coverage: BaseGeometry
+    route: LineString,
+    facility: BaseGeometry | None,
+    coverage: BaseGeometry,
+    crs: str = geometry.PROJECTED_CRS,
 ) -> float:
     """Facility fraction normalized over the IN-COVERAGE portion of the route.
 
@@ -164,32 +182,38 @@ def _fraction_in_coverage(
     When the route is fully out of coverage the denominator is 0 → returns 0.0
     (the documented 0/0 → 0 convention).
     """
-    inside = _in_coverage(route, coverage)
+    inside = _in_coverage(route, coverage, crs)
     denom = inside.length
     if denom == 0:
         return 0.0
     if facility is None or facility.is_empty:
         return 0.0
-    pfac = geometry.project_to_utm(facility)
+    pfac = geometry.project_to_utm(facility, crs)
     covered = pfac.buffer(geometry.FACILITY_PROXIMITY_M).intersection(inside).length
     return min(covered / denom, 1.0)
 
 
 def protected_lane_fraction_in_coverage(
-    route: LineString, by_class: dict[str, BaseGeometry], coverage: BaseGeometry
+    route: LineString,
+    by_class: dict[str, BaseGeometry],
+    coverage: BaseGeometry,
+    crs: str = geometry.PROJECTED_CRS,
 ) -> float:
     """``protected_lane_fraction`` normalized over the in-coverage route portion."""
     return _fraction_in_coverage(
-        route, _union_of_classes(by_class, PROTECTED_CLASSES), coverage
+        route, _union_of_classes(by_class, PROTECTED_CLASSES), coverage, crs
     )
 
 
 def greenway_fraction_in_coverage(
-    route: LineString, by_class: dict[str, BaseGeometry], coverage: BaseGeometry
+    route: LineString,
+    by_class: dict[str, BaseGeometry],
+    coverage: BaseGeometry,
+    crs: str = geometry.PROJECTED_CRS,
 ) -> float:
     """``greenway_fraction`` normalized over the in-coverage route portion."""
     return _fraction_in_coverage(
-        route, _union_of_classes(by_class, GREENWAY_CLASSES), coverage
+        route, _union_of_classes(by_class, GREENWAY_CLASSES), coverage, crs
     )
 
 
@@ -267,16 +291,18 @@ def _pure_default_settings(settings: Settings | None) -> Settings:
 
 # --- Coverage loader --------------------------------------------------------
 
-def load_coverage(coverage_geojson: dict[str, Any] | None = None) -> BaseGeometry:
-    """Load the NYC 5-borough coverage polygon (EPSG:4326 lon/lat) as a shape.
+def load_coverage(
+    coverage_geojson: dict[str, Any] | None = None, profile: RegionProfile = NY
+) -> BaseGeometry:
+    """Load the region's facility-coverage polygon (EPSG:4326 lon/lat) as a shape.
 
-    Defaults to the committed ``config/nyc_coverage.geojson`` (water-included
-    union of the 5 boroughs). A caller may inject a raw GeoJSON geometry/Feature
+    Defaults to ``profile.coverage_path`` (NY = the committed 5-borough
+    ``nyc_coverage.geojson``). A caller may inject a raw GeoJSON geometry/Feature
     dict (the tests pass a small synthetic box). Accepts a Feature, a
     FeatureCollection, or a bare geometry.
     """
     if coverage_geojson is None:
-        coverage_geojson = json.loads(_COVERAGE_PATH.read_text())
+        coverage_geojson = json.loads(Path(profile.coverage_path).read_text())
     data = coverage_geojson
     if data.get("type") == "FeatureCollection":
         geoms = [shape(f["geometry"]) for f in data["features"]]
@@ -323,7 +349,10 @@ WHERE source = %(source)s
 GROUP BY facility_class
 """
 
-_ROUTES_SQL = "SELECT id, source, ST_AsBinary(geom) AS geom, surface_breakdown FROM routes WHERE geom IS NOT NULL"
+_ROUTES_SQL = (
+    "SELECT id, source, ST_AsBinary(geom) AS geom, surface_breakdown "
+    "FROM routes WHERE geom IS NOT NULL AND region = %(region)s"
+)
 
 _UPDATE_SQL = """
 UPDATE routes SET
@@ -369,28 +398,31 @@ def run(
     coverage_geojson: dict[str, Any] | None = None,
     facility_source: str = "nyc_dot",
     settings: Settings | None = None,
+    profile: RegionProfile = NY,
 ) -> ScoringStats:
-    """Score every route in ``routes`` in place (recompute-in-place; idempotent).
+    """Score every route for this region in place (recompute-in-place; idempotent).
 
-    For each route: load its geometry, find the facility segments within 15 m
-    (grouped by class), load the coverage polygon, compute the coverage-normalized
-    facility fractions + surface quality + the composite, and UPDATE the four
-    score columns. No rows are inserted/deleted, so re-running is naturally
-    idempotent and stable (behavior 6).
+    For each route in ``profile``'s region: load its geometry, find the facility
+    segments within 15 m (grouped by class), load the coverage polygon, compute
+    the coverage-normalized facility fractions + surface quality + the composite,
+    and UPDATE the four score columns. ``profile`` supplies the region filter,
+    coverage polygon, and projected CRS. No rows are inserted/deleted, so
+    re-running is naturally idempotent and stable (behavior 6).
     """
     s = settings or Settings()
-    coverage = load_coverage(coverage_geojson)
+    crs = profile.projected_crs
+    coverage = load_coverage(coverage_geojson, profile)
     stats = ScoringStats()
 
     with conn.cursor() as read_cur, conn.cursor() as work_cur:
-        read_cur.execute(_ROUTES_SQL)
+        read_cur.execute(_ROUTES_SQL, {"region": profile.key})
         for route_id, source, geom_wkb, surface_breakdown in read_cur:
             route = wkb.loads(bytes(geom_wkb))
             by_class = _facilities_near(work_cur, route, source=facility_source)
 
-            cov = facility_coverage_fraction(route, coverage)
-            prot = protected_lane_fraction_in_coverage(route, by_class, coverage)
-            grn = greenway_fraction_in_coverage(route, by_class, coverage)
+            cov = facility_coverage_fraction(route, coverage, crs)
+            prot = protected_lane_fraction_in_coverage(route, by_class, coverage, crs)
+            grn = greenway_fraction_in_coverage(route, by_class, coverage, crs)
             surf = surface_quality(surface_breakdown, s)
             q = quality_score(
                 protected_lane_fraction=prot,
@@ -427,6 +459,7 @@ def run_final_pass(
     coverage_geojson: dict[str, Any] | None = None,
     facility_source: str = "nyc_dot",
     settings: Settings | None = None,
+    profile: RegionProfile = NY,
 ) -> FinalPassStats:
     """The orchestrated final Phase-3 pass (WP5): score every row, THEN dedup.
 
@@ -462,10 +495,12 @@ def run_final_pass(
         coverage_geojson=coverage_geojson,
         facility_source=facility_source,
         settings=settings,
+        profile=profile,
     )
-    # Full-table cross-source dedup: every source is a deletable candidate (no
-    # only_sources restriction), so canon↔osm marquee twins are resolved here.
-    deduped = p4.apply_dedup_pass(conn)
+    # Full-table cross-source dedup for THIS region: every source is a deletable
+    # candidate (no only_sources restriction), so canon↔osm marquee twins are
+    # resolved here. Region-scoped so a second metro is never a dedup candidate.
+    deduped = p4.apply_dedup_pass(conn, profile=profile)
 
     return FinalPassStats(
         scored=score_stats.scored,

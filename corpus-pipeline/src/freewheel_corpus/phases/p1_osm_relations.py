@@ -38,15 +38,12 @@ from shapely.geometry import LineString
 from freewheel_corpus import geometry
 from freewheel_corpus.clients.overpass import OverpassClient
 from freewheel_corpus.metro import assert_in_metro_bounds, load_metro_boundary
+from freewheel_corpus.region_profile import NY, RegionProfile
 
 PHASE = "phase1"
 SOURCE = "osm_relation"
 ATTRIBUTION = "© OpenStreetMap contributors, ODbL 1.0"
 MATCH_QUALITY = 1.0
-
-# Slice 1 literal: every row is NY. The RegionProfile abstraction threads this
-# per-region in a later slice (see docs/multi-region-seattle-plan.md §2, §8).
-REGION = "ny"
 
 
 # --- Parsing ---------------------------------------------------------------
@@ -136,15 +133,16 @@ def extract_tags(rel: ParsedRelation) -> dict[str, Any]:
 
 # --- Overpass query / poly: filter -----------------------------------------
 
-def metro_poly_filter() -> str:
-    """Build the Overpass ``poly:`` string from the metro boundary polygon.
+def metro_poly_filter(profile: RegionProfile = NY) -> str:
+    """Build the Overpass ``poly:`` string from the region's boundary polygon.
 
     Overpass expects ``"lat lon lat lon ..."`` — **latitude first**. The boundary
     file is GeoJSON ``[lon, lat]``, so this is the single place the order is
-    flipped. Every emitted point is asserted in metro bounds (in ``(lon, lat)``
-    order) so a transposition raises rather than querying the wrong region.
+    flipped. Every emitted point is asserted in the region's bounds (in
+    ``(lon, lat)`` order) so a transposition raises rather than querying the wrong
+    region. ``profile`` selects the metro (default NY).
     """
-    boundary = load_metro_boundary()
+    boundary = load_metro_boundary(profile)
     coords = list(boundary.exterior.coords)
     # Drop the duplicated closing vertex Overpass does not need.
     if len(coords) > 1 and coords[0] == coords[-1]:
@@ -152,14 +150,14 @@ def metro_poly_filter() -> str:
 
     parts: list[str] = []
     for lon, lat in coords:
-        assert_in_metro_bounds(lon, lat)  # loud failure on a transposed file
+        assert_in_metro_bounds(lon, lat, profile)  # loud failure on a transposed file
         parts.append(f"{lat} {lon}")  # latitude FIRST for Overpass
     return " ".join(parts)
 
 
-def build_query(poly: str | None = None) -> str:
+def build_query(poly: str | None = None, profile: RegionProfile = NY) -> str:
     """Build the Overpass QL query for ``route=bicycle`` relations in the poly."""
-    poly_str = poly if poly is not None else metro_poly_filter()
+    poly_str = poly if poly is not None else metro_poly_filter(profile)
     return (
         "[out:json][timeout:180];\n"
         f'relation["route"="bicycle"](poly:"{poly_str}");\n'
@@ -169,9 +167,11 @@ def build_query(poly: str | None = None) -> str:
 
 # --- Assembly --------------------------------------------------------------
 
-def assemble(rel: ParsedRelation) -> geometry.AssemblyResult:
-    """Assemble a relation's member ways into one continuous line."""
-    return geometry.assemble_relation(rel.ways)
+def assemble(
+    rel: ParsedRelation, crs: str = geometry.PROJECTED_CRS
+) -> geometry.AssemblyResult:
+    """Assemble a relation's member ways into one continuous line (``crs`` metres)."""
+    return geometry.assemble_relation(rel.ways, crs)
 
 
 # --- DB ingest -------------------------------------------------------------
@@ -241,18 +241,22 @@ def _log(cur: psycopg.Cursor, *, event_type: str, source_ref: str,
 
 
 def ingest_relations(
-    conn: psycopg.Connection, relations: list[ParsedRelation]
+    conn: psycopg.Connection,
+    relations: list[ParsedRelation],
+    profile: RegionProfile = NY,
 ) -> IngestStats:
     """Assemble, validate, and upsert relations; log gaps/rejects to ingest_log.
 
-    Idempotent: upsert on ``(source, source_id)`` so a second run updates the
-    existing row rather than inserting a duplicate. Returns counters.
+    Idempotent: upsert on ``(region, source, source_id)`` so a second run updates
+    the existing row rather than inserting a duplicate. ``profile`` sets the region
+    and the projected CRS for all length/loop/gap math (default NY). Returns counters.
     """
+    crs = profile.projected_crs
     stats = IngestStats()
     with conn.cursor() as cur:
         for rel in relations:
             source_ref = str(rel.osm_id)
-            result = assemble(rel)
+            result = assemble(rel, crs)
 
             if result.line is None:
                 stats.empty += 1
@@ -268,14 +272,14 @@ def ingest_relations(
             if result.dropped:
                 stats.gaps_dropped += 1
                 dropped_km = sum(
-                    geometry.line_length_km(d) for d in result.dropped
+                    geometry.line_length_km(d, crs) for d in result.dropped
                 )
                 # Measure each dropped piece's nearest endpoint gap to the kept
                 # line so the audit trail reflects the TRUTH: assembly keeps the
                 # single longest component and drops the rest (spurs + any
                 # sub-threshold continuation gaps), it does not gate on > 50 m.
                 gaps = sorted(
-                    geometry.endpoint_gap_m(d, result.line) for d in result.dropped
+                    geometry.endpoint_gap_m(d, result.line, crs) for d in result.dropped
                 )
                 small = sum(1 for g in gaps if g < geometry.GAP_THRESHOLD_M)
                 _log(
@@ -323,13 +327,13 @@ def ingest_relations(
             line = result.line
             start = line.coords[0]
             params = {
-                "region": REGION,
+                "region": profile.key,
                 "source": SOURCE,
                 "source_id": source_ref,
                 "name": tag_cols["name"],
                 "geom_wkt": line.wkt,
                 "start_wkt": f"POINT({start[0]} {start[1]})",
-                "is_loop": geometry.is_loop(line),
+                "is_loop": geometry.is_loop(line, crs),
                 "distance_km": result.length_km,
                 "match_quality": MATCH_QUALITY,
                 "osm_way_ids": tag_cols["osm_way_ids"] or None,
@@ -355,6 +359,7 @@ def run(
     client: OverpassClient | None = None,
     poly: str | None = None,
     no_cache: bool = False,
+    profile: RegionProfile = NY,
 ) -> IngestStats:
     """Run Phase 1 end-to-end: query Overpass (cached) -> parse -> ingest.
 
@@ -362,7 +367,7 @@ def run(
     cached fixture through the SAME ingest path the live CLI run uses.
     """
     overpass = client if client is not None else OverpassClient()
-    query = build_query(poly)
+    query = build_query(poly, profile)
     payload = overpass.query(query, no_cache=no_cache)
     relations = parse_overpass(payload)
-    return ingest_relations(conn, relations)
+    return ingest_relations(conn, relations, profile)

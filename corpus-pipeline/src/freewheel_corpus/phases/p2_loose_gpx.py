@@ -40,6 +40,8 @@ from freewheel_corpus import matching
 from freewheel_corpus.clients.arcgis import ArcGISClient, clip_feature_to_metro
 from freewheel_corpus.clients.valhalla import ValhallaClient
 from freewheel_corpus.matching import TraceClient
+from freewheel_corpus.metro import load_metro_boundary
+from freewheel_corpus.region_profile import NY, RegionProfile
 
 PHASE = "phase2"
 
@@ -48,10 +50,15 @@ USBRS_SOURCE = "usbrs"
 OPEN_GPX_SOURCE = "open_gpx"
 
 ATTRIBUTION_NYSDOT = "NYSDOT State Bike Routes; map-matched via Valhalla (OpenStreetMap, ODbL)"
+ATTRIBUTION_WSDOT = "WSDOT Approved US Bike Routes; map-matched via Valhalla (OpenStreetMap, ODbL)"
 ATTRIBUTION_GPX = "Manual GPX; map-matched via Valhalla (© OpenStreetMap contributors, ODbL)"
 
-# Slice 1 literal: every row is NY. RegionProfile threads this later (§2, §8).
-REGION = "ny"
+# Per-region designated-route attribution (Phase-2 ArcGIS source). NY stays the
+# exact former string; Seattle gets WSDOT. Falls back to NY for any other region.
+_DESIGNATED_ATTRIBUTION = {
+    "ny": ATTRIBUTION_NYSDOT,
+    "seattle": ATTRIBUTION_WSDOT,
+}
 
 
 # --- DB SQL (Phase 2 needs geom_original + breakdown columns p1 omitted) -----
@@ -132,17 +139,20 @@ def _store_match(
     client: TraceClient,
     extra_tags: dict[str, Any] | None,
     stats: IngestStats,
+    profile: RegionProfile = NY,
 ) -> None:
     """Map-match one raw line and upsert it; log failed_match / oversize.
 
     This is the single seam every Phase-2 source flows through, so the
     geom / geom_original rule and the audit trail are applied in exactly one
     place. The geometry-computed ``distance_km`` always reflects the stored
-    ``geom`` (snapped on success, raw on failure/oversize).
+    ``geom`` (snapped on success, raw on failure/oversize). ``profile`` supplies
+    the ``region`` value and the projected CRS for the match/length math.
     """
     from freewheel_corpus import geometry
 
-    result = matching.match_route(raw, client)
+    crs = profile.projected_crs
+    result = matching.match_route(raw, client, crs=crs)
 
     geom = result.geom
     geom_original = result.geom_original
@@ -150,15 +160,15 @@ def _store_match(
     tags = dict(extra_tags or {})
 
     params = {
-        "region": REGION,
+        "region": profile.key,
         "source": source,
         "source_id": source_id,
         "name": name,
         "geom_wkt": geom.wkt,
         "geom_original_wkt": geom_original.wkt,
         "start_wkt": f"POINT({start[0]} {start[1]})",
-        "is_loop": geometry.is_loop(geom),
-        "distance_km": geometry.line_length_km(geom),
+        "is_loop": geometry.is_loop(geom, crs),
+        "distance_km": geometry.line_length_km(geom, crs),
         "match_quality": result.match_quality,
         "surface_breakdown": json.dumps(result.surface_breakdown) if result.surface_breakdown else None,
         "waytype_breakdown": json.dumps(result.waytype_breakdown) if result.waytype_breakdown else None,
@@ -225,8 +235,24 @@ def _store_match(
 
 # --- NYSDOT (ArcGIS) ---------------------------------------------------------
 
-def _nysdot_name(props: dict[str, Any], oid: str) -> str:
-    return props.get("Rte_Name") or props.get("STR_1") or f"NYSDOT route {oid}"
+def _designated_name(props: dict[str, Any], oid: str, key: str) -> str:
+    """Name for a designated-route feature across regions (NYSDOT / WSDOT fields).
+
+    NY's NYSDOT layer uses ``Rte_Name``/``STR_1``; WSDOT's Approved US Bike Routes
+    layer (8) uses ``BikeRouteName``/``RoadName``. Falls back to a region-labelled
+    ``"{label} route {oid}"``.
+    """
+    # NY must stay byte-identical: only NYSDOT's own fields + the NYSDOT fallback.
+    if key != "seattle":
+        return props.get("Rte_Name") or props.get("STR_1") or f"NYSDOT route {oid}"
+    # Seattle / WSDOT Approved US Bike Routes (layer 8) fields.
+    return (
+        props.get("BikeRouteName")
+        or props.get("RoadName")
+        or props.get("Rte_Name")
+        or props.get("STR_1")
+        or f"WSDOT route {oid}"
+    )
 
 
 def ingest_nysdot(
@@ -235,39 +261,52 @@ def ingest_nysdot(
     client: ArcGISClient | None = None,
     trace_client: TraceClient | None = None,
     no_cache: bool = False,
+    profile: RegionProfile = NY,
 ) -> IngestStats:
-    """Ingest NYSDOT State Bike Routes: paginate, clip to metro, map-match, upsert.
+    """Ingest designated-route ArcGIS features: paginate, clip, map-match, upsert.
 
-    Features that do not intersect the metro polygon are skipped silently (they
-    are not in scope). The ``Status`` field is preserved in ``tags`` for audit.
+    Features that do not intersect the region's clip polygon are skipped silently
+    (they are not in scope). The ``Status`` field is preserved in ``tags`` for
+    audit. ``profile`` supplies the region, clip boundary, projected CRS, and the
+    ArcGIS layer path for the default client (NYSDOT for NY, WSDOT for Seattle).
     """
-    arcgis = client if client is not None else ArcGISClient()
+    arcgis = (
+        client
+        if client is not None
+        else ArcGISClient(layer_path=profile.arcgis_layer_path)
+    )
     valhalla = trace_client if trace_client is not None else ValhallaClient()
+    boundary = load_metro_boundary(profile)
 
     stats = IngestStats()
     features = arcgis.fetch_all_features(no_cache=no_cache)
     with conn.cursor() as cur:
         for feature in features:
-            clipped = clip_feature_to_metro(feature)
+            clipped = clip_feature_to_metro(feature, boundary)
             if clipped is None:
-                continue  # outside metro — skip
+                continue  # outside the region — skip
             props = clipped.properties
             oid = str(props.get("OBJECTID", ""))
             extra_tags = {
+                # NYSDOT fields + WSDOT (layer 8) fields; absent keys are dropped.
                 k: props[k]
-                for k in ("Status", "Rte_Type", "Surf_Type", "COUNTY", "REGION")
+                for k in (
+                    "Status", "Rte_Type", "Surf_Type", "COUNTY", "REGION",
+                    "BikeRouteName", "BikeRouteNumber", "BikeRouteType", "RoadName",
+                )
                 if props.get(k) is not None
             }
             _store_match(
                 cur,
                 source=NYSDOT_SOURCE,
                 source_id=oid,
-                name=_nysdot_name(props, oid),
+                name=_designated_name(props, oid, profile.key),
                 raw=clipped.geom,
-                attribution=ATTRIBUTION_NYSDOT,
+                attribution=_DESIGNATED_ATTRIBUTION.get(profile.key, ATTRIBUTION_NYSDOT),
                 client=valhalla,
                 extra_tags=extra_tags,
                 stats=stats,
+                profile=profile,
             )
     conn.commit()
     return stats
@@ -302,6 +341,7 @@ def ingest_gpx_dir(
     *,
     source: str,
     client: TraceClient | None = None,
+    profile: RegionProfile = NY,
 ) -> IngestStats:
     """Ingest every ``*.gpx`` in ``directory`` (map-matched, upserted).
 
@@ -345,6 +385,7 @@ def ingest_gpx_dir(
                     client=valhalla,
                     extra_tags=None,
                     stats=stats,
+                    profile=profile,
                 )
     conn.commit()
     return stats
@@ -365,18 +406,25 @@ def run(
     usbrs_dir: Path | str = USBRS_DIR,
     open_gpx_dir: Path | str = OPEN_GPX_DIR,
     no_cache: bool = False,
+    profile: RegionProfile = NY,
 ) -> dict[str, IngestStats]:
-    """Run Phase 2 end-to-end: NYSDOT (ArcGIS) + USBRS + open GPX → ``routes``.
+    """Run Phase 2 end-to-end: designated routes (ArcGIS) + USBRS + open GPX → ``routes``.
 
     Returns per-source stats. Sources are injectable so the CLI passes
     settings-configured clients and the tests pass fakes. An empty/missing GPX
-    directory is tolerated (no error).
+    directory is tolerated (no error). ``profile`` scopes the region (default NY).
     """
     nysdot = ingest_nysdot(
-        conn, client=arcgis_client, trace_client=trace_client, no_cache=no_cache
+        conn,
+        client=arcgis_client,
+        trace_client=trace_client,
+        no_cache=no_cache,
+        profile=profile,
     )
-    usbrs = ingest_gpx_dir(conn, usbrs_dir, source=USBRS_SOURCE, client=trace_client)
+    usbrs = ingest_gpx_dir(
+        conn, usbrs_dir, source=USBRS_SOURCE, client=trace_client, profile=profile
+    )
     open_gpx = ingest_gpx_dir(
-        conn, open_gpx_dir, source=OPEN_GPX_SOURCE, client=trace_client
+        conn, open_gpx_dir, source=OPEN_GPX_SOURCE, client=trace_client, profile=profile
     )
     return {"nysdot": nysdot, "usbrs": usbrs, "open_gpx": open_gpx}

@@ -78,29 +78,37 @@ DEDUP_SIMPLIFY_M = 5.0  # simplify tolerance before the overlap math (projected 
 DEDUP_LENGTH_RATIO_MIN = 0.95
 
 
-@lru_cache(maxsize=1)
-def _to_utm() -> Transformer:
-    """Cached EPSG:4326 -> EPSG:32618 transformer (always_xy: lon/lat order)."""
-    return Transformer.from_crs("EPSG:4326", PROJECTED_CRS, always_xy=True)
+# The projected CRS is threaded per-region (multi-region Slice 2): every metric
+# helper takes ``crs`` defaulting to NY's EPSG:32618, so existing NY call sites are
+# byte-identical, while Seattle passes EPSG:32610 (UTM 10N). The transformer cache
+# is keyed BY crs (not a singleton) so each region reuses its own cached
+# transformer — using the wrong UTM zone throws no error, it silently distorts
+# every metre, so this must be threaded, never edited in one place (plan §3).
+@lru_cache(maxsize=None)
+def _to_utm(crs: str = PROJECTED_CRS) -> Transformer:
+    """Cached EPSG:4326 -> ``crs`` transformer (always_xy: lon/lat order)."""
+    return Transformer.from_crs("EPSG:4326", crs, always_xy=True)
 
 
-@lru_cache(maxsize=1)
-def _from_utm() -> Transformer:
-    """Cached EPSG:32618 -> EPSG:4326 transformer (always_xy: lon/lat order)."""
-    return Transformer.from_crs(PROJECTED_CRS, "EPSG:4326", always_xy=True)
+@lru_cache(maxsize=None)
+def _from_utm(crs: str = PROJECTED_CRS) -> Transformer:
+    """Cached ``crs`` -> EPSG:4326 transformer (always_xy: lon/lat order)."""
+    return Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
 
 
-def project_to_utm(geom: BaseGeometry) -> BaseGeometry:
-    """Project a lon/lat (EPSG:4326) geometry to EPSG:32618 metres."""
-    return transform(_to_utm().transform, geom)
+def project_to_utm(geom: BaseGeometry, crs: str = PROJECTED_CRS) -> BaseGeometry:
+    """Project a lon/lat (EPSG:4326) geometry to ``crs`` metres (default UTM 18N)."""
+    return transform(_to_utm(crs).transform, geom)
 
 
-def project_to_wgs84(geom: BaseGeometry) -> BaseGeometry:
-    """Inverse of :func:`project_to_utm`: EPSG:32618 metres -> lon/lat (EPSG:4326)."""
-    return transform(_from_utm().transform, geom)
+def project_to_wgs84(geom: BaseGeometry, crs: str = PROJECTED_CRS) -> BaseGeometry:
+    """Inverse of :func:`project_to_utm`: ``crs`` metres -> lon/lat (EPSG:4326)."""
+    return transform(_from_utm(crs).transform, geom)
 
 
-def resample_line(line: LineString, spacing_m: float = 50.0) -> LineString:
+def resample_line(
+    line: LineString, spacing_m: float = 50.0, crs: str = PROJECTED_CRS
+) -> LineString:
     """Resample a lon/lat ``LineString`` to a point roughly every ``spacing_m``.
 
     Used by Phase 2 (WP2) to densify a raw GPX/NYSDOT polyline before sending it
@@ -114,7 +122,7 @@ def resample_line(line: LineString, spacing_m: float = 50.0) -> LineString:
     interior segment is ``spacing_m`` long and only the final remainder segment
     is shorter. A degenerate (zero-length) line is returned unchanged.
     """
-    projected = project_to_utm(line)
+    projected = project_to_utm(line, crs)
     total = projected.length
     if total == 0:
         return line
@@ -126,7 +134,7 @@ def resample_line(line: LineString, spacing_m: float = 50.0) -> LineString:
 
     points = [projected.interpolate(d) for d in distances]
     densified = LineString([(p.x, p.y) for p in points])
-    wgs = list(project_to_wgs84(densified).coords)
+    wgs = list(project_to_wgs84(densified, crs).coords)
     # Pin the exact original endpoints — the inverse projection round-trips with
     # sub-mm float drift, but downstream map-matching should see the true raw
     # start/end vertices, not their re-projected approximations.
@@ -152,7 +160,9 @@ class AssemblyResult:
     dropped: list[LineString] = field(default_factory=list)
 
 
-def assemble_relation(ways: list[LineString]) -> AssemblyResult:
+def assemble_relation(
+    ways: list[LineString], crs: str = PROJECTED_CRS
+) -> AssemblyResult:
     """Assemble OSM member ways into one continuous ``LineString``.
 
     ``shapely.ops.linemerge`` reorders and reverses exactly-touching segments
@@ -175,30 +185,30 @@ def assemble_relation(ways: list[LineString]) -> AssemblyResult:
         return AssemblyResult(line=None)
 
     if isinstance(merged, LineString):
-        return AssemblyResult(line=merged, length_km=line_length_km(merged))
+        return AssemblyResult(line=merged, length_km=line_length_km(merged, crs))
 
     if isinstance(merged, MultiLineString):
         # Pick the longest component by projected metres; drop the rest.
         components = sorted(
-            merged.geoms, key=lambda g: project_to_utm(g).length, reverse=True
+            merged.geoms, key=lambda g: project_to_utm(g, crs).length, reverse=True
         )
         longest = components[0]
         dropped = list(components[1:])
         return AssemblyResult(
             line=longest,
-            length_km=line_length_km(longest),
+            length_km=line_length_km(longest, crs),
             dropped=dropped,
         )
 
     return AssemblyResult(line=None)
 
 
-def line_length_km(line: LineString) -> float:
-    """Length of a lon/lat ``LineString`` in km, projected to EPSG:32618."""
-    return project_to_utm(line).length / 1000.0
+def line_length_km(line: LineString, crs: str = PROJECTED_CRS) -> float:
+    """Length of a lon/lat ``LineString`` in km, projected to ``crs`` (default 18N)."""
+    return project_to_utm(line, crs).length / 1000.0
 
 
-def length_ratio(a: LineString, b: LineString) -> float:
+def length_ratio(a: LineString, b: LineString, crs: str = PROJECTED_CRS) -> float:
     """Projected length ratio ``min(len_a, len_b) / max(len_a, len_b)`` in [0, 1].
 
     Both lines are projected to EPSG:32618 (so the ratio is a true metric ratio,
@@ -208,15 +218,17 @@ def length_ratio(a: LineString, b: LineString) -> float:
     two rides are similar length) AND they overlap. A zero-length (degenerate)
     line yields 0.0 (it can never be a similar-length duplicate of a real line).
     """
-    la = project_to_utm(a).length
-    lb = project_to_utm(b).length
+    la = project_to_utm(a, crs).length
+    lb = project_to_utm(b, crs).length
     longer = max(la, lb)
     if longer == 0:
         return 0.0
     return min(la, lb) / longer
 
 
-def endpoint_gap_m(component: LineString, kept: LineString) -> float:
+def endpoint_gap_m(
+    component: LineString, kept: LineString, crs: str = PROJECTED_CRS
+) -> float:
     """Nearest distance (projected metres) from an endpoint of ``component`` to
     an endpoint of ``kept``.
 
@@ -225,26 +237,26 @@ def endpoint_gap_m(component: LineString, kept: LineString) -> float:
     disconnected piece, and a value of 0 with a degree-≥3 junction is a spur that
     ``linemerge`` correctly could not fold into a single line.
     """
-    cp = project_to_utm(component)
-    kp = project_to_utm(kept)
+    cp = project_to_utm(component, crs)
+    kp = project_to_utm(kept, crs)
     c_ends = [Point(cp.coords[0]), Point(cp.coords[-1])]
     k_ends = [Point(kp.coords[0]), Point(kp.coords[-1])]
     return min(c.distance(k) for c in c_ends for k in k_ends)
 
 
-def is_loop(line: LineString) -> bool:
+def is_loop(line: LineString, crs: str = PROJECTED_CRS) -> bool:
     """True when the line's start and end endpoints are < 200 m apart (projected).
 
-    Distance is measured in EPSG:32618 metres (ADR-0002), so the threshold is a
-    true 200 m regardless of latitude.
+    Distance is measured in ``crs`` metres (ADR-0002; default UTM 18N), so the
+    threshold is a true 200 m regardless of latitude.
     """
-    projected = project_to_utm(line)
+    projected = project_to_utm(line, crs)
     coords = list(projected.coords)
     start, end = Point(coords[0]), Point(coords[-1])
     return start.distance(end) < LOOP_THRESHOLD_M
 
 
-def routes_overlap(a: LineString, b: LineString) -> bool:
+def routes_overlap(a: LineString, b: LineString, crs: str = PROJECTED_CRS) -> bool:
     """Pure, DB-free dedup overlap predicate (WP1; used by Phase 4 / final dedup).
 
     Project both lines to EPSG:32618, ``simplify`` them (tolerance
@@ -259,8 +271,8 @@ def routes_overlap(a: LineString, b: LineString) -> bool:
     symmetric for typical pairs. Callers that need a definitive answer should
     pass the longer route as ``a`` or test both orders.
     """
-    pa = project_to_utm(a).simplify(DEDUP_SIMPLIFY_M)
-    pb = project_to_utm(b).simplify(DEDUP_SIMPLIFY_M)
+    pa = project_to_utm(a, crs).simplify(DEDUP_SIMPLIFY_M)
+    pb = project_to_utm(b, crs).simplify(DEDUP_SIMPLIFY_M)
 
     shorter_len = min(pa.length, pb.length)
     if shorter_len == 0:

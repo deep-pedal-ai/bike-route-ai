@@ -1,0 +1,137 @@
+# DRAFT — every coordinate requires human verification before ingestion
+#
+# These marquee Seattle / Puget Sound rides are a best-effort DRAFT (Phase 4 /
+# WP4), mirroring config/canon.yaml (NY). The coordinates are HUMAN-ENTERED
+# ESTIMATES from map knowledge, NOT survey-grade — a meaningful fraction will
+# route to a distance OUTSIDE the ±25% gate on the first live run and be SKIPPED
+# + logged (this is EXPECTED, plan §8/§11). A human verifies each coordinate (and
+# tunes the waypoints so ORS routes the intended corridor) before a re-run
+# promotes the skipped entries.
+#
+# CONVENTION (Q5): coordinates here are HUMAN [lat, lon] — latitude FIRST. Code
+# swaps to [lon, lat] in exactly one place (p4.latlon_to_lonlat) with a region-
+# bounds guard (Seattle box: lat 47.0-48.0, lon -122.6..-121.8). This is the
+# OPPOSITE order from config/seattle_boundary.geojson (RFC 7946 [lon, lat]).
+# Do not transpose.
+#
+# Each entry mirrors canon.yaml's schema:
+#   slug / name / start [lat, lon] / waypoints [[lat, lon], ...] /
+#   expected_km (FULL round-trip distance for out_and_back) / out_and_back /
+#   variants (each its own name + expected_km, optionally overriding waypoints).
+
+rides:
+  - slug: burke-gilman-trail
+    name: Burke-Gilman Trail
+    start: [47.6700, -122.3030]      # U-District / Gas Works area
+    waypoints:
+      - [47.6890, -122.2750]         # Lake Washington / Matthews Beach
+      - [47.7330, -122.2880]         # Lake Forest Park (NE end)
+    expected_km: 28.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 28.0 }
+      - { name: gasworks-to-matthews, expected_km: 14.0, waypoints: [[47.6890, -122.2750]] }
+
+  - slug: alki-trail
+    name: Alki Trail (West Seattle)
+    start: [47.5810, -122.4070]      # Alki Beach
+    waypoints:
+      - [47.5905, -122.3870]         # Harbor Ave / Duwamish Head
+      - [47.5760, -122.4140]         # Alki Point
+    expected_km: 11.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 11.0 }
+
+  - slug: elliott-bay-myrtle-edwards
+    name: Elliott Bay / Myrtle Edwards Waterfront
+    start: [47.6160, -122.3560]      # Myrtle Edwards Park
+    waypoints:
+      - [47.6280, -122.3760]         # Smith Cove / Centennial Park
+      - [47.6010, -122.3390]         # Downtown waterfront
+    expected_km: 8.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 8.0 }
+
+  - slug: lake-washington-loop
+    name: Lake Washington Loop
+    start: [47.5990, -122.2860]      # Leschi / Lake Washington Blvd
+    waypoints:
+      - [47.5550, -122.2620]         # Seward Park
+      - [47.5300, -122.2350]         # Renton south end
+      - [47.6420, -122.2080]         # Kirkland / Eastside shore
+      - [47.6360, -122.2480]         # Evergreen Point / SR-520
+      - [47.5990, -122.2860]         # back to Leschi (close the loop)
+    expected_km: 80.0
+    out_and_back: false
+    variants:
+      - { name: full, expected_km: 80.0 }
+
+  - slug: mercer-island-loop
+    name: Mercer Island Loop
+    start: [47.5870, -122.2350]      # North Mercer Island
+    waypoints:
+      - [47.5560, -122.2300]         # south end
+      - [47.5700, -122.2520]         # west shore
+      - [47.5870, -122.2350]         # back to start
+    expected_km: 22.0
+    out_and_back: false
+    variants:
+      - { name: full, expected_km: 22.0 }
+
+  - slug: seward-park-loop
+    name: Seward Park Loop
+    start: [47.5520, -122.2580]      # Seward Park entrance
+    waypoints:
+      - [47.5490, -122.2480]         # peninsula loop
+      - [47.5520, -122.2580]         # back to start
+    expected_km: 4.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 4.0 }
+
+  - slug: green-lake-loop
+    name: Green Lake Loop
+    start: [47.6810, -122.3320]      # Green Lake Park
+    waypoints:
+      - [47.6850, -122.3400]         # west shore
+      - [47.6790, -122.3250]         # east shore
+      - [47.6810, -122.3320]         # back to start
+    expected_km: 4.5
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 4.5 }
+
+  - slug: sammamish-river-trail
+    name: Sammamish River Trail
+    start: [47.6700, -122.1180]      # Redmond / Marymoor area
+    waypoints:
+      - [47.7080, -122.1620]         # Woodinville
+      - [47.7340, -122.2050]         # Bothell (Burke-Gilman junction)
+    expected_km: 22.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 22.0 }
+
+  - slug: chief-sealth-trail
+    name: Chief Sealth Trail
+    start: [47.5510, -122.2940]      # Beacon Hill south
+    waypoints:
+      - [47.5340, -122.2810]         # mid-trail
+      - [47.5170, -122.2720]         # Rainier Beach
+    expected_km: 9.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 9.0 }
+
+  - slug: interurban-trail-north
+    name: Interurban Trail (North)
+    start: [47.7250, -122.3450]      # Shoreline / N 145th
+    waypoints:
+      - [47.7600, -122.3420]         # Echo Lake
+      - [47.7780, -122.3380]         # Shoreline north end
+    expected_km: 14.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 14.0 }

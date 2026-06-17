@@ -26,6 +26,8 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 # before each DB-backed test so runs are repeatable. Order: tables first, then
 # the migrations ledger. CASCADE handles indexes/constraints.
 _MIGRATION_OBJECTS = (
+    "DROP TABLE IF EXISTS route_pois CASCADE",
+    "DROP TABLE IF EXISTS pois CASCADE",
     "DROP TABLE IF EXISTS facility_segments CASCADE",
     "DROP TABLE IF EXISTS ingest_log CASCADE",
     "DROP TABLE IF EXISTS routes CASCADE",

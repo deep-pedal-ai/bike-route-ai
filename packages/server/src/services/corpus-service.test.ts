@@ -5,6 +5,7 @@ import type {
   CorpusRouteDetailProps,
   CorpusStats,
   FacilityProps,
+  PoiSummary,
 } from '@bike-route-ai/shared';
 
 import {
@@ -49,6 +50,24 @@ const detailFeature = (
     osm_way_id_count: 0,
     tags: {},
   },
+});
+
+const poiSummary = (
+  id: number,
+  position_fraction: number | null,
+  overrides: Partial<PoiSummary> = {},
+): PoiSummary => ({
+  id,
+  name: `poi-${id}`,
+  bucket: 'coffee_food',
+  lat: 40.5,
+  lng: -73.9,
+  distance_m: 42,
+  position_fraction,
+  image_url: null,
+  image_license: null,
+  image_attribution: null,
+  ...overrides,
 });
 
 const facilityFeature = (
@@ -180,6 +199,57 @@ describe('createCorpusService().getRoute', () => {
       caught = e;
     }
     expect((caught as { statusCode?: number }).statusCode).toBe(404);
+  });
+
+  it('passes POIs through unchanged, preserving order and each element', async () => {
+    // The client (SQL) is responsible for ORDER BY position_fraction; the
+    // service is a passthrough. So the testable behavior at this seam is
+    // order-PRESERVATION: pre-ordered input comes back in the same order with
+    // every element field intact (name/bucket/lat/lng/image fields).
+    const pois: PoiSummary[] = [
+      poiSummary(10, 0.1, { bucket: 'coffee_food' }),
+      poiSummary(20, 0.5, {
+        bucket: 'landmark',
+        image_url: 'https://commons/File:X.jpg',
+        image_license: 'CC-BY-SA-4.0',
+        image_attribution: 'Photographer Y',
+      }),
+      poiSummary(30, 0.9, { bucket: 'scenic' }),
+    ];
+    const feature = detailFeature(286);
+    feature.properties.pois = pois;
+    const client = makeClient({
+      getRouteById: vi.fn().mockResolvedValue(feature),
+    });
+    const service = createCorpusService(client);
+
+    const result = await service.getRoute(286);
+
+    expect(result.properties.pois).toEqual(pois);
+    // Order is preserved as given.
+    expect(result.properties.pois?.map((p) => p.id)).toEqual([10, 20, 30]);
+    // Each element carries the display fields.
+    const landmark = result.properties.pois?.[1];
+    expect(landmark).toMatchObject({
+      bucket: 'landmark',
+      lat: 40.5,
+      lng: -73.9,
+      image_url: 'https://commons/File:X.jpg',
+      image_attribution: 'Photographer Y',
+    });
+  });
+
+  it('surfaces pois: [] for a route with no nearby POIs', async () => {
+    const feature = detailFeature(287);
+    feature.properties.pois = [];
+    const client = makeClient({
+      getRouteById: vi.fn().mockResolvedValue(feature),
+    });
+    const service = createCorpusService(client);
+
+    const result = await service.getRoute(287);
+
+    expect(result.properties.pois).toEqual([]);
   });
 });
 

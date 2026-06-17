@@ -74,7 +74,35 @@ export const getRouteById = async (
         'facility_coverage_fraction', facility_coverage_fraction,
         'attribution', attribution,
         'osm_way_id_count', coalesce(array_length(osm_way_ids, 1), 0),
-        'tags', coalesce(tags, '{}'::jsonb)
+        'tags', coalesce(tags, '{}'::jsonb),
+        -- Nearby POIs for this route (POI enrichment §4a/§5 "Serving"). Correlated
+        -- subquery: route_pois rp JOIN pois p, filtered to THIS route. The sort is
+        -- placed INSIDE jsonb_agg so the array order survives aggregation; NULL
+        -- position_fraction sorts last (default ASC NULLS LAST). coalesce(...,'[]')
+        -- makes the key always present (empty array when a route has no POIs).
+        'pois', coalesce(
+          (
+            select jsonb_agg(
+              jsonb_build_object(
+                'id', p.id,
+                'name', p.name,
+                'bucket', p.category_bucket,
+                'lat', ST_Y(p.geom),
+                'lng', ST_X(p.geom),
+                'distance_m', rp.distance_m,
+                'position_fraction', rp.position_fraction,
+                'image_url', p.image_url,
+                'image_license', p.image_license,
+                'image_attribution', p.image_attribution
+              )
+              order by rp.position_fraction
+            )
+            from route_pois rp
+            join pois p on p.id = rp.poi_id
+            where rp.route_id = routes.id
+          ),
+          '[]'::jsonb
+        )
       )
     ) as result
     from routes

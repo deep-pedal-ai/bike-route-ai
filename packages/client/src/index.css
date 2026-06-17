@@ -1,22 +1,102 @@
 @import "tailwindcss";
 
+/*
+  THEME TOKEN LAYER — light-first.
+
+  :root holds the DAYTIME (light) palette and is the default. Dark values live
+  under [data-theme="dark"], flipped onto <html> by the no-flash script in
+  index.html and the ThemeProvider at runtime.
+
+  IMPORTANT for migrators: the hue-named legacy tokens are valued by ROLE, not
+  by hue. In light mode their names are intentionally misleading — e.g.
+  --color-cream is the PRIMARY FOREGROUND token (it was used for body text in
+  the dark theme), so in light mode it resolves to a dark ink, not to cream.
+  When migrating a component, pick the token by the role you need (surface /
+  foreground / muted / accent), not by the colour the name suggests. Prefer the
+  explicit role tokens (--color-ink, --color-danger-*, --color-warning-*) for
+  new code.
+*/
 :root {
+  /* Surfaces — daytime cream/off-white canvas with a faint warm tint.
+     Lightness is spread (page < raised panel) so layers read as distinct. */
+  --color-forest: oklch(97% 0.009 95);
+  --color-forest-panel: oklch(99.6% 0.004 95 / 0.96);
+  --color-bark: oklch(94% 0.011 95);
+  --color-bark-soft: oklch(95.5% 0.009 95 / 0.8);
+  --color-bark-border: oklch(78% 0.014 110 / 0.66);
+
+  /* Brand accent — leaf green, deepened for contrast on a light canvas */
+  --color-leaf: oklch(56% 0.13 142);
+  --color-leaf-hover: oklch(50% 0.13 142);
+  --color-leaf-border: oklch(56% 0.13 142 / 0.4);
+  --color-leaf-wash: oklch(56% 0.13 142 / 0.1);
+
+  /* Info / routes — sky blue */
+  --color-river: oklch(54% 0.12 240);
+  --color-sky-wash: oklch(54% 0.12 240 / 0.1);
+
+  /* Secondary accents */
+  --color-clay: oklch(58% 0.13 40);
+  --color-trail: oklch(60% 0.11 75);
+
+  /* Foreground roles (legacy hue names kept; valued by role) */
+  --color-cream: oklch(26% 0.02 145);   /* primary foreground → migrate to --color-ink */
+  --color-sage-text: oklch(40% 0.025 145);
+  --color-moss-muted: oklch(52% 0.02 145);
+
+  /* Explicit role tokens (preferred for new code) */
+  --color-ink: oklch(26% 0.02 145);
+
+  /* Danger — replaces raw red-* */
+  --color-danger: oklch(55% 0.2 27);
+  --color-danger-border: oklch(55% 0.2 27 / 0.34);
+  --color-danger-wash: oklch(55% 0.2 27 / 0.1);
+
+  /* Warning — replaces raw amber-* */
+  --color-warning: oklch(62% 0.14 75);
+  --color-warning-border: oklch(62% 0.14 75 / 0.34);
+  --color-warning-wash: oklch(62% 0.14 75 / 0.12);
+}
+
+[data-theme="dark"] {
+  /* Surfaces — deep forest night */
   --color-forest: oklch(22% 0.035 145);
   --color-forest-panel: oklch(24% 0.03 135 / 0.94);
   --color-bark: oklch(18% 0.025 120);
   --color-bark-soft: oklch(20% 0.025 120 / 0.72);
   --color-bark-border: oklch(39% 0.035 120 / 0.58);
+
+  /* Brand accent — leaf green, brightened for a dark canvas */
   --color-leaf: oklch(70% 0.115 125);
   --color-leaf-hover: oklch(76% 0.105 125);
   --color-leaf-border: oklch(70% 0.115 125 / 0.34);
   --color-leaf-wash: oklch(70% 0.115 125 / 0.12);
+
+  /* Info / routes — sky blue */
   --color-river: oklch(68% 0.08 220);
   --color-sky-wash: oklch(68% 0.08 220 / 0.14);
+
+  /* Secondary accents */
   --color-clay: oklch(65% 0.1 45);
   --color-trail: oklch(72% 0.09 82);
-  --color-cream: oklch(92% 0.018 95);
+
+  /* Foreground roles */
+  --color-cream: oklch(92% 0.018 95);    /* primary foreground → migrate to --color-ink */
   --color-sage-text: oklch(78% 0.035 125);
   --color-moss-muted: oklch(61% 0.025 125);
+
+  /* Explicit role tokens */
+  --color-ink: oklch(92% 0.018 95);
+
+  /* Danger */
+  --color-danger: oklch(72% 0.16 25);
+  --color-danger-border: oklch(72% 0.16 25 / 0.34);
+  --color-danger-wash: oklch(72% 0.16 25 / 0.12);
+
+  /* Warning */
+  --color-warning: oklch(80% 0.13 78);
+  --color-warning-border: oklch(80% 0.13 78 / 0.34);
+  --color-warning-wash: oklch(80% 0.13 78 / 0.12);
 }
 
 @keyframes fadeSlideUp {
@@ -92,6 +172,27 @@
   animation: searchPanelIn 0.32s ease-out both;
 }
 
+/* Mobile bottom surfaces (results dock, filter sheet) rise from the bottom edge.
+   Transform-only so it stays cheap and composited. */
+@keyframes dockSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dock-motion {
+  animation: dockSlideUp 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sheet-motion {
+  animation: dockSlideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 /* Honor reduced-motion across every panel: keep the gentle fade, drop the
    translate/scale. Redefining the keyframes (rather than killing the animation)
    preserves the fade-in so panels don't pop. Placed AFTER the min-width
@@ -116,6 +217,15 @@
   }
 
   @keyframes detailPanelIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes dockSlideUp {
     from {
       opacity: 0;
     }

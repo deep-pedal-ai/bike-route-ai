@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, within, act } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, within, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 
@@ -462,5 +462,100 @@ describe('MapExplorer — map-tab search', () => {
       'aria-current',
       'true',
     );
+  });
+});
+
+// Force the viewport branch in useIsMobile. The setup file defaults matchMedia to
+// `matches: false` (desktop); these tests flip it to mobile and restore after.
+function setIsMobile(isMobile: boolean) {
+  window.matchMedia = ((query: string) => ({
+    matches: isMobile,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+}
+
+describe('MapExplorer — mobile layout', () => {
+  afterEach(() => setIsMobile(false));
+
+  it('renders the bottom dock and seeds the map highlight from the centered card', async () => {
+    setIsMobile(true);
+    mockedSearchRoutes.mockResolvedValue({
+      results: [searchResult('286', 'Aqueduct Trail')],
+      filtersRelaxed: false,
+    });
+
+    renderAt('/map');
+    submitSearch('aqueduct');
+    await screen.findByRole('button', { name: /focus aqueduct trail/i });
+
+    // Dock-only affordance (the grabber) confirms the dock, not the desktop panel.
+    expect(screen.getByRole('button', { name: /open the centered route/i })).toBeInTheDocument();
+
+    // The centered card (first result) drives the highlight with no hover — the
+    // touch replacement for desktop's hover-to-highlight.
+    await waitFor(() => {
+      expect((routeLayerProps()?.paint as Record<string, unknown>)['line-opacity']).toEqual(
+        routeOpacityExpression('286'),
+      );
+    });
+  });
+
+  it('frames results into the bottom band (reserves dock space, not the side panels)', async () => {
+    setIsMobile(true);
+    mockedSearchRoutes.mockResolvedValue({
+      results: [searchResult('286', 'Aqueduct Trail'), searchResult('4', 'Ridge Run')],
+      filtersRelaxed: false,
+    });
+
+    renderAt('/map');
+    fitBoundsSpy.mockClear();
+    submitSearch('two routes');
+    await screen.findByRole('button', { name: /focus aqueduct trail/i });
+
+    // No container height in jsdom → peek clamps to 168, bottom = 168 + 24.
+    expect(fitBoundsSpy).toHaveBeenCalledWith(
+      boundsForIds(['286', '4']),
+      expect.objectContaining({ padding: { top: 132, bottom: 192, left: 64, right: 64 } }),
+    );
+  });
+
+  it('selecting a card expands the dock into the route detail', async () => {
+    setIsMobile(true);
+    mockedUseCorpusRoute.mockReturnValue({
+      data: fixture.routeDetail as never,
+      loading: false,
+      error: null,
+    });
+    mockedSearchRoutes.mockResolvedValue({
+      results: [searchResult('286', 'Aqueduct Trail')],
+      filtersRelaxed: false,
+    });
+
+    renderAt('/map');
+    submitSearch('aqueduct');
+    fireEvent.click(await screen.findByRole('button', { name: /focus aqueduct trail/i }));
+
+    // The dock grows to host the detail, with a collapse-back affordance.
+    expect(screen.getByRole('button', { name: /back to results/i })).toBeInTheDocument();
+    expect(screen.getByText('Prospect Park Loop (double)')).toBeInTheDocument();
+  });
+
+  it('keeps the default view filter-free and opens filters in a bottom sheet on tap', () => {
+    setIsMobile(true);
+
+    renderAt('/map');
+    // No always-on filter panel on mobile — the FilterBar sources aren't mounted.
+    expect(screen.queryByRole('button', { name: 'canon' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /filters and layers/i }));
+
+    expect(screen.getByRole('dialog', { name: /map filters/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'canon' })).toBeInTheDocument();
   });
 });

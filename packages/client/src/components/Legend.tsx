@@ -26,10 +26,10 @@ export default function Legend({
             <div key={s.label} className="flex items-center gap-2">
               <div
                 data-testid="legend-swatch"
-                className="h-2.5 w-2.5 rounded-sm border border-stone-950/30"
+                className="h-2.5 w-2.5 rounded-sm border border-[var(--color-bark-border)]"
                 style={{ backgroundColor: s.color }}
               />
-              <span className="font-mono text-[10px] uppercase text-zinc-400">
+              <span className="font-mono text-[10px] uppercase text-[var(--color-sage-text)]">
                 {s.label}
               </span>
             </div>
@@ -44,7 +44,7 @@ export default function Legend({
               background: `linear-gradient(to right, ${qualityGradient.from}, ${qualityGradient.to})`,
             }}
           />
-          <div className="flex justify-between font-mono text-[10px] uppercase text-zinc-500">
+          <div className="flex justify-between font-mono text-[10px] uppercase text-[var(--color-moss-muted)]">
             <span>Low</span>
             <span>High</span>
           </div>
@@ -52,7 +52,7 @@ export default function Legend({
       )}
 
       {showFacilities && facilitySwatches ? (
-        <div className="grid grid-cols-2 gap-1.5 border-t border-zinc-800/80 pt-3">
+        <div className="grid grid-cols-2 gap-1.5 border-t border-[var(--color-bark-border)] pt-3">
           {facilitySwatches.map((f) => (
             <div key={f.label} className="flex items-center gap-2">
               <div
@@ -60,7 +60,7 @@ export default function Legend({
                 className="h-2.5 w-2.5 rounded-sm"
                 style={{ backgroundColor: f.color }}
               />
-              <span className="font-mono text-[10px] uppercase text-zinc-400">
+              <span className="font-mono text-[10px] uppercase text-[var(--color-sage-text)]">
                 {f.label}
               </span>
             </div>

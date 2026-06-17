@@ -58,7 +58,7 @@ export default function FilterBar({
   };
 
   return (
-    <div className="space-y-3 text-xs text-zinc-300">
+    <div className="space-y-3 text-xs text-[var(--color-sage-text)]">
       <div className="grid grid-cols-4 gap-1.5">
         {SOURCES.map((source) => {
           const active = value.sources.includes(source);
@@ -84,7 +84,7 @@ export default function FilterBar({
 
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1">
-          <span className="block text-[10px] uppercase text-zinc-500">Min km</span>
+          <span className="block text-[10px] uppercase text-[var(--color-moss-muted)]">Min km</span>
           <input
             type="number"
             aria-label="Min distance (km)"
@@ -95,7 +95,7 @@ export default function FilterBar({
         </label>
 
         <label className="space-y-1">
-          <span className="block text-[10px] uppercase text-zinc-500">Max km</span>
+          <span className="block text-[10px] uppercase text-[var(--color-moss-muted)]">Max km</span>
           <input
             type="number"
             aria-label="Max distance (km)"

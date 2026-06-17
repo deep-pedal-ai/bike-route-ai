@@ -20,10 +20,10 @@ export default function SearchBar({ query, onQueryChange, onGenerate, isLoading 
           aria-label="Describe the route you're looking for"
           placeholder="Find me a 20-mile gravel loop with a coffee shop stop and scenic ridge views..."
           rows={3}
-          className="w-full resize-none rounded-xl bg-transparent px-4 pb-2 pt-4 text-base text-zinc-100 placeholder-zinc-600 focus:outline-none"
+          className="w-full resize-none rounded-xl bg-transparent px-4 pb-2 pt-4 text-base text-[var(--color-ink)] placeholder:text-[var(--color-moss-muted)] focus:outline-none"
         />
         <div className="flex items-center justify-between px-4 pb-3">
-          <span className="text-xs text-zinc-600">
+          <span className="text-xs text-[var(--color-moss-muted)]">
             {query.length > 0 ? `${query.length} chars` : ''}
           </span>
           <button

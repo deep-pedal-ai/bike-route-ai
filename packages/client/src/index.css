@@ -114,6 +114,23 @@
   animation: fadeSlideUp 0.45s ease-out forwards;
 }
 
+/* Switching between the regular search view and the agent (plan) view. Kept
+   short so the swap feels snappy, not like a page load. */
+@keyframes viewSwitch {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.view-motion {
+  animation: viewSwitch 0.18s ease-out both;
+}
+
 @keyframes mapPanelIn {
   from {
     opacity: 0;
@@ -235,6 +252,15 @@
   }
 
   @keyframes fadeSlideUp {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes viewSwitch {
     from {
       opacity: 0;
     }

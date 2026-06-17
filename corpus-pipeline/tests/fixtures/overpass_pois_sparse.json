@@ -1,0 +1,113 @@
+{
+  "version": 0.6,
+  "generator": "synthetic POI fixture (sparse rural, S3)",
+  "elements": [
+    {
+      "type": "node",
+      "id": 2001,
+      "lat": 40.780721,
+      "lon": -73.959989,
+      "tags": {
+        "amenity": "cafe",
+        "name": "Country Diner"
+      }
+    },
+    {
+      "type": "node",
+      "id": 2002,
+      "lat": 40.781802,
+      "lon": -73.961972,
+      "tags": {
+        "tourism": "viewpoint",
+        "name": "Ridge View"
+      }
+    },
+    {
+      "type": "way",
+      "id": 2003,
+      "center": {
+        "lat": 40.781351,
+        "lon": -73.967979
+      },
+      "tags": {
+        "historic": "ruins",
+        "name": "Old Site 0",
+        "wikidata": "Q9000"
+      }
+    },
+    {
+      "type": "way",
+      "id": 2004,
+      "center": {
+        "lat": 40.781441,
+        "lon": -73.965578
+      },
+      "tags": {
+        "historic": "ruins",
+        "name": "Old Site 1",
+        "wikidata": "Q9001"
+      }
+    },
+    {
+      "type": "way",
+      "id": 2005,
+      "center": {
+        "lat": 40.781532,
+        "lon": -73.963176
+      },
+      "tags": {
+        "historic": "ruins",
+        "name": "Old Site 2",
+        "wikidata": "Q9002"
+      }
+    },
+    {
+      "type": "way",
+      "id": 2006,
+      "center": {
+        "lat": 40.781622,
+        "lon": -73.960775
+      },
+      "tags": {
+        "historic": "ruins",
+        "name": "Old Site 3"
+      }
+    },
+    {
+      "type": "way",
+      "id": 2007,
+      "center": {
+        "lat": 40.781712,
+        "lon": -73.958373
+      },
+      "tags": {
+        "historic": "ruins",
+        "name": "Old Site 4"
+      }
+    },
+    {
+      "type": "way",
+      "id": 2008,
+      "center": {
+        "lat": 40.781802,
+        "lon": -73.955972
+      },
+      "tags": {
+        "historic": "ruins",
+        "name": "Old Site 5"
+      }
+    },
+    {
+      "type": "way",
+      "id": 2009,
+      "center": {
+        "lat": 40.781892,
+        "lon": -73.95357
+      },
+      "tags": {
+        "historic": "ruins",
+        "name": "Old Site 6"
+      }
+    }
+  ]
+}

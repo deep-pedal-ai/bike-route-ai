@@ -11,6 +11,13 @@ import psycopg
 
 from freewheel_corpus import migrations
 
+EXPECTED_MIGRATIONS = [
+    "001_init.sql",
+    "002_embeddings.sql",
+    "003_pois.sql",
+    "003_region.sql",
+]
+
 
 def _table_exists(conn, name: str) -> bool:
     with conn.cursor() as cur:
@@ -19,23 +26,19 @@ def _table_exists(conn, name: str) -> bool:
 
 
 def test_run_migrations_applies_001_and_records_it(clean_db):
-    """A fresh DB: 001 is applied, the three tables exist, and schema_migrations
+    """A fresh DB: all migrations apply, core tables exist, and schema_migrations
     records the schema migrations."""
     applied = migrations.run_migrations(clean_db)
     clean_db.commit()
 
-    assert applied == ["001_init.sql", "002_embeddings.sql", "003_region.sql"]
+    assert applied == EXPECTED_MIGRATIONS
     assert _table_exists(clean_db, "routes")
     assert _table_exists(clean_db, "facility_segments")
     assert _table_exists(clean_db, "ingest_log")
 
     with clean_db.cursor() as cur:
         cur.execute("SELECT filename FROM schema_migrations ORDER BY filename")
-        assert [r[0] for r in cur.fetchall()] == [
-            "001_init.sql",
-            "002_embeddings.sql",
-            "003_region.sql",
-        ]
+        assert [r[0] for r in cur.fetchall()] == EXPECTED_MIGRATIONS
 
 
 def test_run_migrations_is_idempotent(clean_db):
@@ -45,12 +48,12 @@ def test_run_migrations_is_idempotent(clean_db):
     second = migrations.run_migrations(clean_db)
     clean_db.commit()
 
-    assert first == ["001_init.sql", "002_embeddings.sql", "003_region.sql"]
+    assert first == EXPECTED_MIGRATIONS
     assert second == []  # no pending migrations
 
     with clean_db.cursor() as cur:
         cur.execute("SELECT count(*) FROM schema_migrations")
-        assert cur.fetchone()[0] == 3  # not duplicated
+        assert cur.fetchone()[0] == len(EXPECTED_MIGRATIONS)  # not duplicated
 
 
 def _columns(conn, table: str) -> dict[str, str]:
@@ -98,14 +101,15 @@ def test_unique_key_is_region_source_source_id(clean_db):
     clean_db.commit()
 
     with clean_db.cursor() as cur:
-        # Same (source, source_id) in two regions: allowed under the new key.
         cur.execute(
-            "INSERT INTO routes (region, source, source_id) VALUES "
-            "('ny', 'canon', 'central-park'), ('seattle', 'canon', 'central-park')"
+            """
+            INSERT INTO routes (region, source, source_id)
+            VALUES ('ny', 'canon', 'central-park'),
+                   ('seattle', 'canon', 'central-park')
+            """
         )
         clean_db.commit()
 
-        # A duplicate within the SAME region violates the unique constraint.
         with clean_db.cursor() as dup_cur:
             try:
                 dup_cur.execute(
@@ -117,3 +121,62 @@ def test_unique_key_is_region_source_source_id(clean_db):
             else:  # pragma: no cover - guards the assertion intent
                 raise AssertionError("expected a unique-violation on the in-region dup")
         clean_db.rollback()
+
+
+def test_migration_003_creates_poi_tables_and_constraints(clean_db):
+    """S1: 003 applies — both POI tables exist with the idempotency UNIQUE key."""
+    migrations.run_migrations(clean_db)
+    clean_db.commit()
+
+    assert _table_exists(clean_db, "pois")
+    assert _table_exists(clean_db, "route_pois")
+
+    # UNIQUE(osm_type, osm_id) is what makes p6 upserts idempotent.
+    with clean_db.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM pg_constraint "
+            "WHERE conname = 'pois_osm_key' AND contype = 'u'"
+        )
+        assert cur.fetchone() is not None
+
+
+def test_route_pois_row_round_trips_with_fk(clean_db):
+    """S1: a route_pois row round-trips, keyed to a real routes + pois FK."""
+    migrations.run_migrations(clean_db)
+    clean_db.commit()
+
+    with clean_db.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO routes (source, source_id, geom)
+            VALUES ('test', 'rp-1',
+                    ST_GeomFromText('LINESTRING(-73.97 40.78, -73.96 40.79)', 4326))
+            RETURNING id
+            """
+        )
+        route_id = cur.fetchone()[0]
+        cur.execute(
+            """
+            INSERT INTO pois (osm_type, osm_id, name, category_bucket, geom)
+            VALUES ('node', 42, 'Test Cafe', 'coffee_food',
+                    ST_SetSRID(ST_MakePoint(-73.965, 40.785), 4326))
+            RETURNING id
+            """
+        )
+        poi_id = cur.fetchone()[0]
+        cur.execute(
+            """
+            INSERT INTO route_pois
+                (route_id, poi_id, distance_m, matched_bucket, position_fraction)
+            VALUES (%s, %s, 42.5, 'coffee_food', 0.5)
+            """,
+            (route_id, poi_id),
+        )
+        clean_db.commit()
+
+        cur.execute(
+            "SELECT distance_m, matched_bucket, position_fraction "
+            "FROM route_pois WHERE route_id = %s AND poi_id = %s",
+            (route_id, poi_id),
+        )
+        assert cur.fetchone() == (42.5, "coffee_food", 0.5)

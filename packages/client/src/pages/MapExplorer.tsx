@@ -22,6 +22,7 @@ import { useFacilities } from '../hooks/use-facilities';
 import { useRouteSearch } from '../hooks/use-route-search';
 import { colorBySource, colorByQuality } from '../utils/route-color';
 import { facilityColor } from '../utils/facility-color';
+import { poiColor } from '../utils/poi-color';
 import { buildFilter, buildIdFilter } from '../utils/maplibre-filter';
 import { fitBoundsFromFeatures } from '../utils/bounds';
 import {
@@ -38,8 +39,11 @@ import type {
   Bbox,
   CorpusRoutesResponse,
   FacilitiesResponse,
+  PoiBucket,
+  PoiSummary,
   RouteSearchResult,
 } from '@bike-route-ai/shared';
+import type { FeatureCollection, Point } from 'geojson';
 
 type ColorMode = 'source' | 'quality';
 type MapView = {
@@ -50,6 +54,15 @@ type MapView = {
 
 const SOURCES = ['osm_relation', 'canon', 'generated', 'nysdot'] as const;
 const FACILITY_CLASSES = ['protected', 'lane', 'sharrow', 'greenway', 'other'] as const;
+// Stable bucket ordering for the POI pin colour `match` expression. Mirrors the
+// five display buckets in the shared contract (PoiBucket).
+const POI_BUCKETS: PoiBucket[] = [
+  'coffee_food',
+  'water_rest',
+  'scenic',
+  'landmark',
+  'bike_services',
+];
 
 // Per-region initial camera lookup. Slice 1 has only NY; the default center +
 // zoom comes from the region registry (regions.ts), structured per-region so
@@ -133,6 +146,33 @@ function facilityPaintExpression(): ExpressionSpecification {
     ...FACILITY_CLASSES.flatMap((cls) => [cls, facilityColor(cls)]),
     facilityColor('__unknown__'),
   ] as unknown as ExpressionSpecification;
+}
+
+// `['match', ['get','bucket'], 'coffee_food', <c>, …, <fallback>]` — POI pins
+// coloured per bucket via the single-sourced poiColor util.
+function poiPaintExpression(): ExpressionSpecification {
+  return [
+    'match',
+    ['get', 'bucket'],
+    ...POI_BUCKETS.flatMap((bucket) => [bucket, poiColor(bucket)]),
+    poiColor('__unknown__'),
+  ] as unknown as ExpressionSpecification;
+}
+
+// Build a [lng,lat] FeatureCollection of Points (EPSG:4326) from the selected
+// route's POIs. The geometry order is [lng, lat]; the Google Maps deep-link in
+// the detail panel uses the reverse (lat,lng) — keep them distinct.
+function poisToFeatureCollection(
+  pois: PoiSummary[],
+): FeatureCollection<Point, { bucket: PoiBucket }> {
+  return {
+    type: 'FeatureCollection',
+    features: pois.map((poi) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [poi.lng, poi.lat] },
+      properties: { bucket: poi.bucket },
+    })),
+  };
 }
 
 // --- SUBTLE cycling-tune of the light basemap. Voyager is already fresh, so
@@ -300,6 +340,13 @@ export default function MapExplorer() {
     overlayOn,
   );
 
+  // POIs for the selected route (S9). Present only once the detail loads with a
+  // non-empty `pois` array; otherwise the layer renders nothing. Memoized so the
+  // FeatureCollection identity is stable across unrelated re-renders.
+  const pois = useMemo(() => routeDetail?.properties.pois ?? [], [routeDetail]);
+  const poiCollection = useMemo(() => poisToFeatureCollection(pois), [pois]);
+  const hasPois = pois.length > 0;
+
   const view = viewFromRoutes(routes, region.defaultView);
 
   // --- Imperative camera. The old `<Map key=…>` remount threw the camera away
@@ -310,6 +357,7 @@ export default function MapExplorer() {
   const mapRef = useRef<MapRef>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const didInitialFitRef = useRef(false);
+  const focusedRouteParamRef = useRef<string | null>(null);
 
   // Animate the camera to frame `bounds`. Dormant infrastructure for the search
   // feature (hover/click zoom land in later phases); the initial fit-to-all is
@@ -405,6 +453,27 @@ export default function MapExplorer() {
     [routes],
   );
 
+  // Cold deep-links and map-line taps select a route through the URL. Keep the
+  // camera in sync with that selection so the map zooms to the chosen route
+  // instead of staying at the all-corpus overview.
+  useEffect(() => {
+    if (routeParam === null) {
+      focusedRouteParamRef.current = null;
+      return;
+    }
+    if (!mapLoaded || routes.features.length === 0) return;
+    if (focusedRouteParamRef.current === routeParam) return;
+
+    const bounds = boundsForRouteId(routes, routeParam);
+    if (bounds === null) return;
+
+    focusedRouteParamRef.current = routeParam;
+    focusBounds(bounds, {
+      padding: framePadding({ left: true, right: true, top: true }),
+      maxZoom: 16,
+    });
+  }, [routeParam, mapLoaded, routes, focusBounds, framePadding]);
+
   // When results arrive, frame the union of the mappable result geometries —
   // the filtered-in routes are otherwise off-screen and hover-highlight has
   // nothing visible to act on (plan §5.3). Mark as fitted only on a successful
@@ -459,6 +528,7 @@ export default function MapExplorer() {
     // detail panel (right) about to open, under the top search bar — reserve
     // all three so the route stays clear of every floating panel.
     focusBounds(bounds, { padding: framePadding({ left: true, right: true, top: true }) });
+    focusedRouteParamRef.current = String(id);
     selectRoute(id);
   };
 
@@ -697,6 +767,30 @@ export default function MapExplorer() {
           }
         }}
       >
+        {/* POI pins for the selected route render UNDER the facilities + routes
+            layers (rendered first). Mounted only when the selected route detail
+            carries POIs, so clearing the selection removes the layer entirely. */}
+        {hasPois && (
+          <Source id="pois" type="geojson" data={poiCollection}>
+            <Layer
+              id="pois"
+              type="circle"
+              // Insert below the facilities layer. The pois layer mounts only
+              // after the async route detail resolves — by then the unconditional
+              // `facilities` layer already exists, so beforeId places pins under
+              // both facilities and routes regardless of mount order.
+              beforeId="facilities"
+              paint={{
+                'circle-color': poiPaintExpression(),
+                'circle-radius': 5,
+                'circle-stroke-color': casingColor,
+                'circle-stroke-width': 1.5,
+                'circle-opacity': 0.95,
+              }}
+            />
+          </Source>
+        )}
+
         {/* Facility overlay renders UNDER the routes layer (rendered first). */}
         <Source
           id="facilities"

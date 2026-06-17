@@ -1,0 +1,72 @@
+name: RouteExplorer
+options:
+  bundleIdPrefix: com.deepPedal
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+targets:
+  RouteExplorer:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - RouteExplorerApp/Sources
+    resources:
+      - RouteExplorerApp/Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.deepPedal.RouteExplorer
+        PRODUCT_NAME: RouteExplorer
+        INFOPLIST_FILE: RouteExplorerApp/Resources/Info.plist
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_ASSET_PATHS: ""
+        ENABLE_PREVIEWS: YES
+  RouteExplorerTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - RouteExplorerTests
+    dependencies:
+      - target: RouteExplorer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.deepPedal.RouteExplorerTests
+        GENERATE_INFOPLIST_FILE: YES
+  RouteExplorerUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - RouteExplorerUITests
+    dependencies:
+      - target: RouteExplorer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.deepPedal.RouteExplorerUITests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: RouteExplorer
+schemes:
+  RouteExplorer:
+    build:
+      targets:
+        RouteExplorer: all
+        RouteExplorerTests: [test]
+        RouteExplorerUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - RouteExplorerTests
+        - RouteExplorerUITests

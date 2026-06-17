@@ -1,6 +1,6 @@
 """Freewheel corpus pipeline CLI (Typer).
 
-Commands: ``migrate | phase1 | phase2 | phase3 | phase4 | phase5 | stats``.
+Commands: ``migrate | phase1 | phase2 | phase3 | phase4 | phase5 | phase6 | stats``.
 
 ``migrate`` applies pending migrations and records them in ``schema_migrations``.
 ``stats`` reports the corpus shape.
@@ -322,6 +322,35 @@ def phase5() -> None:
     typer.echo(f"  routes scanned:      {stats.scanned}")
     typer.echo(f"  embedded/updated:    {stats.embedded}")
     typer.echo(f"  already current:     {stats.skipped_current}")
+
+
+@app.command()
+def phase6(
+    no_cache: bool = typer.Option(
+        False, "--no-cache", help="Bypass the Overpass disk cache (re-fetch live)."
+    ),
+) -> None:
+    """Phase 6 — POI enrichment: fetch + cache nearby POIs per route (feature §4)."""
+    from freewheel_corpus.clients.overpass import OverpassClient
+    from freewheel_corpus.phases import p6_pois as p6
+
+    settings = _settings()
+    overpass = OverpassClient(base_url=settings.overpass_base_url)
+    with db.connect(settings.database_url) as conn:
+        db.check_postgis(conn)
+        stats = p6.run_p6(conn, overpass_client=overpass)
+
+    typer.echo("Phase 6 — POI enrichment")
+    if stats.migrations_applied:
+        typer.echo(f"  migrations applied:  {', '.join(stats.migrations_applied)}")
+    else:
+        typer.echo("  migrations applied:  none")
+    typer.echo(f"  routes scanned:      {stats.routes_scanned}")
+    typer.echo(f"  routes with POIs:    {stats.routes_with_pois}")
+    typer.echo(f"  zero-POI routes:     {stats.zero_pois}")
+    typer.echo(f"  skipped (fresh):     {stats.skipped_fresh}")
+    typer.echo(f"  errors:              {stats.errors}")
+    typer.echo(f"  POIs upserted:       {stats.pois_upserted}")
 
 
 if __name__ == "__main__":

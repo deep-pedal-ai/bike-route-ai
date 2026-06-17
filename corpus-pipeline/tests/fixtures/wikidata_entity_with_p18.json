@@ -1,0 +1,25 @@
+{
+  "entities": {
+    "Q2589194": {
+      "type": "item",
+      "id": "Q2589194",
+      "claims": {
+        "P18": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P18",
+              "datavalue": {
+                "value": "Bethesda Fountain Central Park.jpg",
+                "type": "string"
+              },
+              "datatype": "commonsMedia"
+            },
+            "type": "statement",
+            "rank": "normal"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -30,6 +30,36 @@ export type CorpusRouteProps = {
   network: string | null;
 };
 
+// POI enrichment (feature: docs/poi-enrichment-feature.md). The five display
+// buckets — these slugs are the contract shared verbatim with the Python
+// pipeline's POI taxonomy (corpus-pipeline .../poi/taxonomy.py). Pins are
+// colored/iconned by bucket on the client.
+export type PoiBucket =
+  | 'coffee_food'
+  | 'water_rest'
+  | 'scenic'
+  | 'landmark'
+  | 'bike_services';
+
+// One nearby point of interest, as served on the route-detail response. Display
+// only — proper nouns/coords/images live here, never in the embedding (§7).
+// Coordinates are EPSG:4326. `position_fraction` is 0..1 along the route and
+// drives pin ordering. Image fields are null for most POIs (§2a) — render the
+// bucket icon and omit the thumbnail when `image_url` is null. The Google Maps
+// deep-link is derived on the client from (lat,lng), never stored.
+export type PoiSummary = {
+  id: number;
+  name: string | null;
+  bucket: PoiBucket;
+  lat: number;
+  lng: number;
+  distance_m: number;
+  position_fraction: number | null;
+  image_url: string | null;
+  image_license: string | null;
+  image_attribution: string | null;
+};
+
 // Full detail — returned for GET /api/corpus/routes/:id.
 export type CorpusRouteDetailProps = CorpusRouteProps & {
   source_id: string;
@@ -43,6 +73,10 @@ export type CorpusRouteDetailProps = CorpusRouteProps & {
   attribution: string | null;
   osm_way_id_count: number;
   tags: Record<string, unknown>;
+  // Nearby POIs, ordered by position_fraction. Optional for back-compat with a
+  // server build that predates S8; clients treat a missing value as []. Always
+  // present (possibly empty) once the detail read-path JOINs it in.
+  pois?: PoiSummary[];
 };
 
 export type FacilityProps = {

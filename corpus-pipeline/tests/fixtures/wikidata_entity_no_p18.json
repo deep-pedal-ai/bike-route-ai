@@ -1,0 +1,21 @@
+{
+  "entities": {
+    "Q11111111": {
+      "type": "item",
+      "id": "Q11111111",
+      "claims": {
+        "P31": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P31",
+              "datavalue": {"value": {"id": "Q33506"}, "type": "wikibase-entityid"}
+            },
+            "type": "statement",
+            "rank": "normal"
+          }
+        ]
+      }
+    }
+  }
+}

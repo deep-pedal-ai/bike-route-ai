@@ -32,6 +32,7 @@ const service = createCorpusService(client);
 // fall to the handler's generic 500.
 function forward(err: unknown, next: NextFunction): void {
   if (err instanceof ServiceError) {
+    console.warn(`[corpus] ${err.statusCode}: ${err.message}`);
     next(new HttpError(err.statusCode, err.message));
     return;
   }

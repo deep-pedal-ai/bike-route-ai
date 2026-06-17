@@ -17,6 +17,7 @@ export function errorHandler(
   _next: NextFunction,
 ): void {
   if (err instanceof HttpError) {
+    console.warn(`[http] ${err.statusCode}: ${err.message}`);
     res.status(err.statusCode).json({ error: err.message, statusCode: err.statusCode });
     return;
   }

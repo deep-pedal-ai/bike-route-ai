@@ -275,7 +275,91 @@ SEATTLE = RegionProfile(
 )
 
 
-REGIONS: dict[str, RegionProfile] = {NY.key: NY, SEATTLE.key: SEATTLE}
+# --- San Francisco / Bay Area: Slice 4. DRAFT geographic data (coords marked
+#     DRAFT in sf_canon.yaml / sf_boundary.geojson; verified by a human via the
+#     phase4 ±25% canon skip-loop before a production run). CRS is UTM 10N
+#     (EPSG:32610) — same as Seattle; the Bay Area is in the same zone.
+#
+# Phase 2 (Caltrans state designated bike routes): UNVERIFIED — no usable ArcGIS
+# FeatureServer layer found after thorough exploration of
+# caltrans-gis.dot.ca.gov/arcgis/rest/services (folders: CHhighway, HQstatewide,
+# SB1, CCBP, etc.). The arcgis_layer_path below is a placeholder that will return
+# no features on a live run; Phase 2 will log "no features found" and continue.
+# When a verified Caltrans ArcGIS layer is discovered, update these two values.
+#
+# Phase 3 (SFMTA city bike facilities): The Socrata dataset id s5wt-b6ed
+# (mentioned in the task) returns HTTP 404 — this is the "Seattle lesson" about
+# broken/federated Socrata views. The working source is the SFMTA Bikeway Network
+# ArcGIS FeatureServer at services.arcgis.com/ONuuV4O5ETfdTBvB. The SFMTA
+# facility class normalizer (normalize_sfmta_facility_class in facility_ingest.py)
+# reads facility_t + barrier_ty + sharrow — three fields, not one. The
+# ingest_arcgis_facilities function dispatches to it when source.source == 'sfmta'.
+#
+# MTC Bay Trail (second facility source): verified at
+# services3.arcgis.com/i2dkYWmb4wHvYPda (status='Existing' filter; all greenway).
+# DEFERRED — incorporating it requires extending FacilitySource to support multiple
+# ArcGIS hosts per region (FacilityLayer.layer_path is concatenated to a single
+# base_url). See docs/sf-source-schema.md §DEFERRED for the proposed extension.
+_SFMTA_FACILITY_BASE_URL = (
+    "https://services.arcgis.com/ONuuV4O5ETfdTBvB/arcgis/rest/services"
+)
+# Placeholder: Caltrans has no verified state-bike-route ArcGIS layer (UNVERIFIED).
+# When a real layer is found, replace the base URL and layer path below.
+_CALTRANS_ARCGIS_BASE_URL = "https://caltrans-gis.dot.ca.gov/arcgis/rest/services"
+
+SF = RegionProfile(
+    key="sf",
+    # Generous nine-county Bay Area box — transposition tripwire, NOT a tight clip.
+    lat_min=36.9,
+    lat_max=38.2,
+    lon_min=-123.0,
+    lon_max=-121.5,
+    boundary_path=_CONFIG_DIR / "sf_boundary.geojson",
+    projected_crs="EPSG:32610",  # UTM 10N — same as Seattle (ADR-0002; Bay Area is UTM 10N)
+    canon_path=_CONFIG_DIR / "sf_canon.yaml",
+    coverage_path=_CONFIG_DIR / "sf_coverage.geojson",
+    # DRAFT (lon, lat) seed points across the Bay Area for p4 generation.
+    generation_seed_points=(
+        (-122.4862, 37.7694),   # Golden Gate Park (SF)
+        (-122.4716, 37.7996),   # Presidio (SF)
+        (-122.4852, 37.8590),   # Sausalito ferry terminal (Marin)
+        (-122.5457, 37.9060),   # Mill Valley / Tam trailhead (Marin)
+        (-122.3027, 37.8654),   # Berkeley Marina (East Bay)
+        (-122.2588, 37.8044),   # Lake Merritt / Oakland (East Bay)
+        (-121.9998, 37.8219),   # Iron Horse Trail midpoint, Danville (East Bay)
+        (-122.0574, 37.5577),   # Coyote Hills, Fremont (East Bay)
+        (-122.3976, 37.5705),   # Sawyer Camp Trail, San Mateo (Peninsula)
+        (-122.2614, 37.5631),   # Foster City / Bay Trail (Peninsula)
+        (-122.0449, 37.3239),   # Stevens Creek Trail, Cupertino (South Bay)
+        (-121.8863, 37.3382),   # Coyote Creek Trail, San Jose (South Bay)
+    ),
+    # Phase 2: UNVERIFIED placeholder — no Caltrans ArcGIS bike-route layer found.
+    # Replace with the real layer path when discovered.
+    arcgis_layer_path="PLACEHOLDER_UNVERIFIED/FeatureServer/0/query",
+    arcgis_base_url=_CALTRANS_ARCGIS_BASE_URL,
+    # Phase 3: SFMTA bike facilities via ArcGIS (Socrata s5wt-b6ed returns 404).
+    # The SFMTA normalizer uses THREE fields (facility_t + barrier_ty + sharrow),
+    # not a single class_field — see normalize_sfmta_facility_class() in
+    # facility_ingest.py, dispatched when source.source == 'sfmta'.
+    # No status_field: SFMTA dataset has no active/retired status column; all
+    # features are treated as current (UNVERIFIED — no retired-facility filter).
+    facility_source=FacilitySource(
+        provider="arcgis",
+        source="sfmta",
+        base_url=_SFMTA_FACILITY_BASE_URL,
+        layers=(
+            FacilityLayer(
+                layer_path="SFMTA_Bikeway_Network/FeatureServer/0/query",
+                class_field="facility_t",   # primary field; SFMTA normalizer also reads
+                                            # barrier_ty and sharrow (multi-field dispatch)
+                # status_field=None: SFMTA has no active/retired status column
+            ),
+        ),
+    ),
+)
+
+
+REGIONS: dict[str, RegionProfile] = {NY.key: NY, SEATTLE.key: SEATTLE, SF.key: SF}
 
 #: The region used when a caller does not specify one — preserves the pre-Slice-2
 #: behaviour (every row was NY) for existing call sites and tests.

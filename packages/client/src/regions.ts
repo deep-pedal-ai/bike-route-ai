@@ -39,6 +39,16 @@ export const REGIONS: Region[] = [
     defaultView: { longitude: -122.33, latitude: 47.61, zoom: 10 },
     enabled: false,
   },
+  {
+    key: 'sf',
+    label: 'San Francisco',
+    // Bay Area default: centre over the bay between SF and Oakland at zoom 12 so
+    // the GGB and East Bay shorelines are both visible on load. Designed to fit
+    // both the city rides (JFK Drive, Embarcadero) and the regional spurs
+    // (Sausalito, Berkeley Marina) within the first viewport. Locked in STEP 0.
+    defaultView: { longitude: -122.48, latitude: 37.81, zoom: 12 },
+    enabled: true,
+  },
 ];
 
 // Look up a region by key, falling back to the default region when the key is

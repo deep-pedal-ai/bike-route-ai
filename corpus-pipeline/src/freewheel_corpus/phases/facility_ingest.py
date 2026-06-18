@@ -128,6 +128,70 @@ def normalize_sdot_facility_class(
     return "other", True
 
 
+# --- SFMTA (San Francisco, ArcGIS) facility classification -------------------
+
+SFMTA_SOURCE = "sfmta"
+ATTRIBUTION_SFMTA = (
+    "SFMTA Bikeway Network (San Francisco Municipal Transportation Agency, ArcGIS)"
+)
+
+# SFMTA Bikeway Network ArcGIS FeatureServer (verified live 2026-06-17):
+#   base: https://services.arcgis.com/ONuuV4O5ETfdTBvB/arcgis/rest/services
+#   layer path: SFMTA_Bikeway_Network/FeatureServer/0/query
+# Distinct facility_t values (queried live): 'BIKE ROUTE', 'BIKE LANE', 'BIKE PATH'
+# barrier_ty values: '' (blank) or 'SAFE-HIT POSTS'
+# sharrow values: 0 or 1
+#
+# JUDGMENT CALLS (UNVERIFIED — flag for human review):
+#   - BIKE ROUTE + sharrow=0: route-signage-only corridor → 'other'.
+#     Reasonable but not confirmed against SFMTA's own data dictionary.
+#   - No status/retired filter: SFMTA has no active/retired status column;
+#     ALL features are treated as current. Could include removed facilities.
+#   - Socrata id s5wt-b6ed (originally in the brief) returns HTTP 404 (broken
+#     federated view — the "Seattle lesson"). Using the ArcGIS source instead.
+_SFMTA_FACILITY_T_VALUES = frozenset({"BIKE ROUTE", "BIKE LANE", "BIKE PATH"})
+
+
+def normalize_sfmta_facility_class(
+    props: dict[str, Any],
+) -> tuple[str, bool]:
+    """Normalize an SFMTA Bikeway Network feature's class; return ``(class, was_unknown)``.
+
+    Uses THREE fields — unlike the single-field SDOT normalizer, SFMTA requires
+    a multi-field dispatch:
+
+    - ``facility_t``: ``'BIKE PATH'`` | ``'BIKE LANE'`` | ``'BIKE ROUTE'``
+    - ``barrier_ty``: ``'SAFE-HIT POSTS'`` marks a physically-protected lane
+    - ``sharrow``: ``1`` means a shared-lane marking is present
+
+    Mapping (verified against live FeatureServer query 2026-06-17):
+
+    - ``BIKE PATH`` → ``'greenway'`` (off-street multi-use path)
+    - ``BIKE LANE`` + ``barrier_ty='SAFE-HIT POSTS'`` → ``'protected'``
+    - ``BIKE LANE`` (no barrier) → ``'lane'``
+    - ``BIKE ROUTE`` + ``sharrow=1`` → ``'sharrow'``
+    - ``BIKE ROUTE`` + ``sharrow=0`` → ``'other'`` [UNVERIFIED: route signage only]
+    - unknown ``facility_t`` → ``'other'`` + ``was_unknown=True``
+    """
+    facility_t = (props.get("facility_t") or "").strip()
+    barrier_ty = (props.get("barrier_ty") or "").strip()
+    sharrow = props.get("sharrow")
+
+    if facility_t == "BIKE PATH":
+        return "greenway", False
+    if facility_t == "BIKE LANE":
+        if barrier_ty == "SAFE-HIT POSTS":
+            return "protected", False
+        return "lane", False
+    if facility_t == "BIKE ROUTE":
+        if sharrow == 1 or sharrow == "1":
+            return "sharrow", False
+        # Route signage only — no physical improvement [UNVERIFIED judgment call]
+        return "other", False
+    # Unknown facility_t value — not in the known set
+    return "other", True
+
+
 def _to_multilinestring(geom: BaseGeometry) -> MultiLineString | None:
     """Coerce a line geometry to ``MultiLineString`` (None if not line-like/empty)."""
     if geom.is_empty:
@@ -302,15 +366,25 @@ def _sdot_facility_id(props: dict[str, Any]) -> str | None:
 
 
 def _classify_arcgis_feature(
-    props: dict[str, Any], layer: FacilityLayer
+    props: dict[str, Any], layer: FacilityLayer, source_type: str | None = None
 ) -> tuple[str, bool]:
-    """Classify one ArcGIS facility feature per its layer's rule.
+    """Classify one ArcGIS facility feature per its layer's rule and source.
 
-    A layer with no ``class_field`` (Multi-use Trails) maps every feature to its
-    ``fixed_class``; otherwise the SDOT ``CATEGORY`` normalizer runs. Returns
-    ``(facility_class, was_unknown)`` (``was_unknown`` is always ``False`` for a
-    fixed-class layer).
+    Dispatch order:
+
+    1. ``source_type='sfmta'`` → :func:`normalize_sfmta_facility_class` (multi-field:
+       ``facility_t`` + ``barrier_ty`` + ``sharrow``).
+    2. ``class_field is None`` → ``fixed_class`` (all Multi-use Trails are greenway).
+    3. Otherwise → :func:`normalize_sdot_facility_class` (single ``class_field``).
+
+    Returns ``(facility_class, was_unknown)`` (``was_unknown`` is always ``False``
+    for a fixed-class layer; SFMTA follows its own ``was_unknown`` convention).
+
+    ``source_type`` is the ``FacilitySource.source`` string (``'sdot'``, ``'sfmta'``,
+    …); ``None`` falls through to the SDOT path for backward compatibility.
     """
+    if source_type == SFMTA_SOURCE:
+        return normalize_sfmta_facility_class(props)
     if layer.class_field is None:
         return (layer.fixed_class or "other"), False
     return normalize_sdot_facility_class(props, layer.class_field)
@@ -377,14 +451,17 @@ def ingest_arcgis_facilities(
                     stats.skipped_no_geom += 1
                     continue
 
-                facility_class, was_unknown = _classify_arcgis_feature(props, layer)
+                facility_class, was_unknown = _classify_arcgis_feature(
+                    props, layer, source_type=source.source
+                )
                 facility_id = _sdot_facility_id(props)
                 if was_unknown:
                     stats.unknown_classes += 1
                     code = props.get(layer.class_field) if layer.class_field else None
+                    src_label = source.source or "arcgis"
                     logger.warning(
-                        "SDOT facility %s has unknown %s=%r -> mapped to 'other'",
-                        facility_id, layer.class_field, code,
+                        "%s facility %s has unknown %s=%r -> mapped to 'other'",
+                        src_label, facility_id, layer.class_field, code,
                     )
                     _log(
                         cur,
@@ -398,6 +475,11 @@ def ingest_arcgis_facilities(
                 status = (
                     props.get(layer.status_field) if layer.status_field else None
                 )
+                # Select the correct attribution string per source.
+                if source.source == SFMTA_SOURCE:
+                    attribution = ATTRIBUTION_SFMTA
+                else:
+                    attribution = ATTRIBUTION_SDOT
                 cur.execute(
                     _INSERT_SQL,
                     {
@@ -407,8 +489,8 @@ def ingest_arcgis_facilities(
                         "facility_class": facility_class,
                         "geom_wkt": multi.wkt,
                         "status": status,
-                        "borough": None,  # no SDOT borough analog
-                        "attribution": ATTRIBUTION_SDOT,
+                        "borough": None,  # no ArcGIS borough analog
+                        "attribution": attribution,
                     },
                 )
                 stats.stored += 1

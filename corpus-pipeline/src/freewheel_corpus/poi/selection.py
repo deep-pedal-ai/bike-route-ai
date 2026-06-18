@@ -27,7 +27,7 @@ from typing import Any
 
 from shapely.geometry import LineString, Point
 
-from freewheel_corpus.geometry import project_to_utm
+from freewheel_corpus.geometry import PROJECTED_CRS, project_to_utm
 from freewheel_corpus.poi.taxonomy import (
     DEFAULT_CONFIG,
     Bucket,
@@ -75,6 +75,7 @@ def select_pois(
     *,
     elements_or_client: Any,
     cfg: SelectionConfig = DEFAULT_CONFIG,
+    crs: str = PROJECTED_CRS,
 ) -> list[SelectedPoi]:
     """Select the rideable, capped set of POIs near ``route_geom`` (feature §6).
 
@@ -82,12 +83,19 @@ def select_pois(
     (recorded fixtures in tests) or an :class:`OverpassClient`; in the latter case
     the Overpass QL is built from the route bbox + whitelist and fetched. The
     return is ordered by ``position_fraction`` (start -> end) for pin display.
+
+    ``crs`` is the region's projected metric CRS for the radius filter and the
+    along-route ``position_fraction``. It MUST be the route's own region's zone:
+    the per-bucket radii (150 m / 400 m) are metres in this projection, so using
+    a far-away zone silently distorts every distance (NY's UTM 18N inflates a
+    Seattle distance ~15%, so a true-150 m POI reads as ~173 m and is wrongly
+    dropped). Defaults to NY's UTM 18N so existing NY callers are unchanged.
     """
     elements = _resolve_elements(route_geom, elements_or_client, cfg)
 
-    projected_route = project_to_utm(route_geom)
+    projected_route = project_to_utm(route_geom, crs)
 
-    candidates = _candidates_within_radius(elements, projected_route, cfg)
+    candidates = _candidates_within_radius(elements, projected_route, cfg, crs)
     ranked_by_bucket = _rank_and_cap_per_bucket(candidates, cfg)
     kept = _cap_total(ranked_by_bucket, cfg)
 
@@ -116,6 +124,7 @@ def _candidates_within_radius(
     elements: list[dict],
     projected_route: LineString,
     cfg: SelectionConfig,
+    crs: str = PROJECTED_CRS,
 ) -> list[_Candidate]:
     candidates: list[_Candidate] = []
     for el in elements:
@@ -129,7 +138,7 @@ def _candidates_within_radius(
             continue
         lng, lat = point
 
-        projected_point = project_to_utm(Point(lng, lat))
+        projected_point = project_to_utm(Point(lng, lat), crs)
         distance_m = projected_route.distance(projected_point)
         if distance_m > cfg.radius_m[bucket]:
             continue

@@ -29,6 +29,7 @@ from freewheel_corpus import migrations
 from freewheel_corpus.poi.images import resolve_image
 from freewheel_corpus.poi.selection import SelectedPoi, select_pois
 from freewheel_corpus.poi.taxonomy import DEFAULT_CONFIG, SelectionConfig
+from freewheel_corpus.region_profile import NY, RegionProfile
 
 PHASE = "p6"
 SOURCE = "overpass"
@@ -50,7 +51,7 @@ class Phase6Stats:
 _ROUTES_SQL = """
 SELECT id, ST_AsGeoJSON(geom)
 FROM routes
-WHERE geom IS NOT NULL
+WHERE geom IS NOT NULL AND region = %s
 ORDER BY id
 """
 
@@ -112,8 +113,9 @@ def run_p6(
     cfg: SelectionConfig = DEFAULT_CONFIG,
     now: Callable[[], datetime] = _utcnow,
     progress: Callable[[dict[str, Any]], None] | None = None,
+    profile: RegionProfile = NY,
 ) -> Phase6Stats:
-    """Fetch + cache POIs for every route, idempotently.
+    """Fetch + cache POIs for every route in ``profile``'s region, idempotently.
 
     ``overpass_client`` is an :class:`OverpassClient`-like object passed straight
     to :func:`select_pois` (tests pass a fake that replays recorded fixtures).
@@ -122,6 +124,13 @@ def run_p6(
     ``progress`` (optional) is called once per route with a small dict
     ``{i, total, route_id, event, ...}`` for live console logging — it never
     affects the batch (a callback exception would propagate, so keep it cheap).
+
+    ``profile`` scopes the run to one region (like every other phase): it filters
+    ``routes`` to ``region = profile.key`` AND supplies the projected CRS for the
+    radius filter. The CRS is correctness-critical — the per-bucket radii are
+    metres in that projection, so a Seattle run MUST use Seattle's UTM 10N, not
+    NY's default UTM 18N (which inflates Seattle distances ~15% and silently drops
+    in-radius POIs). Defaults to NY so existing callers are unchanged.
     """
     migrations_applied = migrations.run_migrations(conn)
     conn.commit()  # persist DDL before the loop so a per-route rollback can't undo it
@@ -129,7 +138,7 @@ def run_p6(
     current_time = now()
 
     with conn.cursor() as cur:
-        cur.execute(_ROUTES_SQL)
+        cur.execute(_ROUTES_SQL, (profile.key,))
         routes = cur.fetchall()
 
     total = len(routes)
@@ -149,7 +158,10 @@ def run_p6(
         try:
             route_geom = shape(json.loads(geom_geojson))
             selected = select_pois(
-                route_geom, elements_or_client=overpass_client, cfg=cfg
+                route_geom,
+                elements_or_client=overpass_client,
+                cfg=cfg,
+                crs=profile.projected_crs,
             )
 
             if not selected:

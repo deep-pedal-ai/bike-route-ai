@@ -329,18 +329,25 @@ def phase6(
     no_cache: bool = typer.Option(
         False, "--no-cache", help="Bypass the Overpass disk cache (re-fetch live)."
     ),
+    region: str = _REGION_OPTION,
 ) -> None:
-    """Phase 6 — POI enrichment: fetch + cache nearby POIs per route (feature §4)."""
+    """Phase 6 — POI enrichment: fetch + cache nearby POIs per route (feature §4).
+
+    Region-scoped like every other phase: only the selected region's routes are
+    enriched, and the region's projected CRS is used for the radius filter (a
+    Seattle run uses UTM 10N — NY's default would inflate every distance ~15%).
+    """
     from freewheel_corpus.clients.overpass import OverpassClient
     from freewheel_corpus.phases import p6_pois as p6
 
     settings = _settings()
+    profile = _resolve_region(region)
     overpass = OverpassClient(base_url=settings.overpass_base_url)
     with db.connect(settings.database_url) as conn:
         db.check_postgis(conn)
-        stats = p6.run_p6(conn, overpass_client=overpass)
+        stats = p6.run_p6(conn, overpass_client=overpass, profile=profile)
 
-    typer.echo("Phase 6 — POI enrichment")
+    typer.echo(f"Phase 6 — POI enrichment (region={profile.key})")
     if stats.migrations_applied:
         typer.echo(f"  migrations applied:  {', '.join(stats.migrations_applied)}")
     else:

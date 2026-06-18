@@ -122,3 +122,36 @@ def test_accepts_an_overpass_client_and_mocks_the_fetch():
     assert client.queries  # a QL string was built and "fetched"
     assert "out center" in client.queries[0]  # ways/relations get their center
     assert any(p.bucket == Bucket.LANDMARK for p in selected)
+
+
+# A Seattle route (UTM 10N) with a café ~140 m off the line. Under the correct
+# Seattle CRS the café is inside the 150 m stop radius; under NY's default UTM 18N
+# the same 140 m reads as ~161 m (the ~15% transverse-Mercator inflation 47° from
+# zone 18's meridian) and the café is wrongly dropped. This pins the region-CRS
+# threading: POI selection must use the route's own zone, not the NY default.
+_SEATTLE_ROUTE = LineString([(-122.305, 47.670), (-122.295, 47.670)])
+_SEATTLE_CAFE = {
+    "type": "node",
+    "id": 9001,
+    "lat": 47.670 + 140 / 111_320,  # ~140 m due north of the line
+    "lon": -122.300,
+    "tags": {"amenity": "cafe", "name": "Ballard Coffee"},
+}
+
+
+def test_uses_region_crs_for_the_radius_filter():
+    in_zone = select_pois(
+        _SEATTLE_ROUTE, elements_or_client=[_SEATTLE_CAFE], crs="EPSG:32610"
+    )
+    assert [p.name for p in in_zone] == ["Ballard Coffee"]
+    # ~140 m true distance, measured correctly in UTM 10N.
+    assert in_zone[0].distance_m < 150
+
+
+def test_wrong_zone_crs_drops_an_in_radius_seattle_poi():
+    # The bug guard: NY's UTM 18N (the former hardcoded default) inflates the
+    # Seattle distance past the 150 m radius, so the café disappears.
+    dropped = select_pois(
+        _SEATTLE_ROUTE, elements_or_client=[_SEATTLE_CAFE], crs="EPSG:32618"
+    )
+    assert dropped == []

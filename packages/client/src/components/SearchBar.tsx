@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Zap, Loader2, Sparkles } from 'lucide-react';
 
 type SearchBarProps = {
@@ -7,6 +8,10 @@ type SearchBarProps = {
   onPlan?: () => void;
   planMode?: boolean;
   isLoading: boolean;
+  // Optional controls rendered in the action row, left of the submit button
+  // (used on the map to host the distance filter). When omitted, the row falls
+  // back to the character count.
+  leadingControls?: ReactNode;
 };
 
 export default function SearchBar({
@@ -16,6 +21,7 @@ export default function SearchBar({
   onPlan,
   planMode = false,
   isLoading,
+  leadingControls,
 }: SearchBarProps) {
   return (
     <div className={`relative w-full ${planMode ? 'h-full' : ''}`}>
@@ -51,9 +57,11 @@ export default function SearchBar({
                 Plan
               </button>
             )}
-            <span className="text-xs text-[var(--color-moss-muted)]">
-              {query.length > 0 ? `${query.length} chars` : ''}
-            </span>
+            {leadingControls ?? (
+              <span className="text-xs text-[var(--color-moss-muted)]">
+                {query.length > 0 ? `${query.length} chars` : ''}
+              </span>
+            )}
           </div>
           <button
             onClick={onGenerate}

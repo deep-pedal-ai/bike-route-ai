@@ -214,35 +214,41 @@ describe('MapExplorer', () => {
     // Before the toggle, every call passed enabled=false (3rd arg).
     expect(mockedUseFacilities.mock.calls.every((c) => c[2] === false)).toBe(true);
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /facility overlay/i }));
+    fireEvent.click(screen.getByRole('button', { name: /facility overlay/i }));
 
     // After the toggle, at least one call passed enabled=true.
     expect(mockedUseFacilities.mock.calls.some((c) => c[2] === true)).toBe(true);
   });
 
-  it('a FilterBar change updates the route Layer filter prop', () => {
+  it('typing a min distance updates the route Layer filter prop (km)', () => {
     renderAt('/map');
 
     const before = routeLayerProps()?.filter;
     expect(before).toEqual(['all']);
 
-    // FilterBar renders a button per source; clicking 'canon' selects it.
-    fireEvent.click(screen.getByRole('button', { name: 'canon' }));
+    // The distance filter lives under the search input; a km value adds a
+    // distance_km lower-bound clause to the layer filter.
+    fireEvent.change(screen.getByLabelText('Minimum distance'), {
+      target: { value: '5' },
+    });
 
     const after = routeLayerProps()?.filter;
-    expect(after).not.toEqual(before);
-    expect(after).toEqual(['all', ['any', ['==', ['get', 'source'], 'canon']]]);
+    expect(after).toEqual(['all', ['>=', ['get', 'distance_km'], 5]]);
   });
 
-  it('the color-mode toggle swaps the route Layer paint expression', () => {
+  it('a min distance entered in miles reaches the filter converted to km', () => {
     renderAt('/map');
 
-    const before = routeLayerProps()?.paint;
+    // Switch the unit to miles, then enter 5 — the stored bound must be km.
+    fireEvent.click(screen.getByRole('button', { name: /switch to miles/i }));
+    fireEvent.change(screen.getByLabelText('Minimum distance'), {
+      target: { value: '5' },
+    });
 
-    fireEvent.click(screen.getByRole('button', { name: /color mode/i }));
-
-    const after = routeLayerProps()?.paint;
-    expect(after).not.toEqual(before);
+    expect(routeLayerProps()?.filter).toEqual([
+      'all',
+      ['>=', ['get', 'distance_km'], 5 * 1.609344],
+    ]);
   });
 
   it('fits the initial map view to loaded corpus bounds instead of using the narrow NY default', () => {
@@ -278,7 +284,7 @@ describe('MapExplorer', () => {
 describe('MapExplorer — map-tab search', () => {
   // Corpus fixture carries route ids 4 and 286 (among others); search results
   // keyed to those ids are "mappable", an out-of-corpus id is not.
-  it('opens the panel (skeleton) and hides the FilterBar while loading — before any results exist', async () => {
+  it('opens the panel (skeleton) while loading — before any results exist', async () => {
     let release: (() => void) | undefined;
     mockedSearchRoutes.mockImplementation(
       () =>
@@ -289,15 +295,12 @@ describe('MapExplorer — map-tab search', () => {
     );
 
     renderAt('/map');
-    // FilterBar is present before searching.
-    expect(screen.getByRole('button', { name: 'canon' })).toBeInTheDocument();
 
     submitSearch('aqueduct');
 
     // panelOpen is true while loading — results is still null.
     const panel = screen.getByRole('complementary', { name: /route search results/i });
     expect(within(panel).getByText('Searching…')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'canon' })).not.toBeInTheDocument();
 
     // Flush the pending request so its trailing state updates don't leak.
     await act(async () => {
@@ -315,7 +318,7 @@ describe('MapExplorer — map-tab search', () => {
     expect(screen.getByRole('button', { name: /close search/i })).toBeInTheDocument();
   });
 
-  it('filters both route layers to the resolved result ids (search supersedes FilterBar)', async () => {
+  it('filters both route layers to the resolved result ids (search supersedes the distance filter)', async () => {
     mockedSearchRoutes.mockResolvedValue({
       results: [searchResult('286', 'Aqueduct Trail'), searchResult('4', 'Ridge Run')],
       filtersRelaxed: false,
@@ -410,7 +413,7 @@ describe('MapExplorer — map-tab search', () => {
     expect(mockedUseCorpusRoute).toHaveBeenCalledWith(286);
   });
 
-  it('closing the panel clears the search and restores the FilterBar + full filter', async () => {
+  it('closing the panel clears the search and restores the full filter', async () => {
     mockedSearchRoutes.mockResolvedValue({
       results: [searchResult('286', 'Aqueduct Trail')],
       filtersRelaxed: false,
@@ -423,8 +426,7 @@ describe('MapExplorer — map-tab search', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /close search/i }));
 
-    // FilterBar returns and the membership filter gives way to the full filter.
-    expect(screen.getByRole('button', { name: 'canon' })).toBeInTheDocument();
+    // The membership filter gives way to the full filter.
     expect(screen.queryByRole('complementary', { name: /route search results/i })).not.toBeInTheDocument();
     expect(routeLayerProps()?.filter).toEqual(['all']);
   });
@@ -445,7 +447,7 @@ describe('MapExplorer — map-tab search', () => {
     );
   });
 
-  it('Escape closes the panel and restores the FilterBar', async () => {
+  it('Escape closes the panel and restores the full filter', async () => {
     mockedSearchRoutes.mockResolvedValue({
       results: [searchResult('286', 'Aqueduct Trail')],
       filtersRelaxed: false,
@@ -460,7 +462,6 @@ describe('MapExplorer — map-tab search', () => {
     expect(
       screen.queryByRole('complementary', { name: /route search results/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'canon' })).toBeInTheDocument();
   });
 
   it('moves focus into the panel on open and back to the search field on close', async () => {
@@ -680,16 +681,21 @@ describe('MapExplorer — mobile layout', () => {
     expect(screen.getByText('Prospect Park Loop (double)')).toBeInTheDocument();
   });
 
-  it('keeps the default view filter-free and opens filters in a bottom sheet on tap', () => {
+  it('exposes the distance filter and facility toggle without a filter sheet on mobile', () => {
     setIsMobile(true);
 
     renderAt('/map');
-    // No always-on filter panel on mobile — the FilterBar sources aren't mounted.
+
+    // The source filter and its mobile bottom sheet were removed entirely.
     expect(screen.queryByRole('button', { name: 'canon' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /filters and layers/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /map filters/i })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /filters and layers/i }));
-
-    expect(screen.getByRole('dialog', { name: /map filters/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'canon' })).toBeInTheDocument();
+    // What survives: the distance filter (under the search input) and the
+    // facility overlay toggle, both reachable on mobile.
+    expect(screen.getByLabelText('Minimum distance')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /facility overlay/i })).toBeInTheDocument();
   });
 });

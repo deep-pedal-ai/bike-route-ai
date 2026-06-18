@@ -16,3 +16,7 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: () => false,
   }),
 });
+
+// jsdom doesn't implement scrollIntoView; Conversation scrolls to the latest
+// message as it streams, so the call needs a no-op stand-in under test.
+Element.prototype.scrollIntoView = () => {};

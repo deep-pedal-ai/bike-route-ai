@@ -41,5 +41,17 @@ export type ErrorResponse = {
   statusCode: number;
 };
 
+// Chat streaming contract. The client POSTs a ChatRequest and consumes a
+// text/event-stream whose frames correspond to the ChatStreamEvent variants
+// below (token deltas, a terminal done, or a generic error).
+export type ChatRequest = {
+  query: string;
+};
+
+export type ChatStreamEvent =
+  | { type: 'token'; value: string }
+  | { type: 'done' }
+  | { type: 'error'; error: string };
+
 // Corpus map-tab contract (new — does not modify the AI-gen types above).
 export * from './corpus.js';

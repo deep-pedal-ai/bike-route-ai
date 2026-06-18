@@ -1,34 +1,88 @@
+import { useState } from 'react';
 import { AlertTriangle, Bike, Sparkles } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
 import QuickQueries from '../components/QuickQueries';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import RouteResults from '../components/RouteResults';
+import Conversation from '../components/Conversation';
+import ChatInput from '../components/ChatInput';
 import { useRouteSearch } from '../hooks/use-route-search';
+import { usePlanChat } from '../hooks/use-plan-chat';
 
 export default function GeneratePage() {
   const { query, setQuery, isLoading, results, filtersRelaxed, error, search } =
     useRouteSearch();
+  const planChat = usePlanChat();
+
+  const [planMode, setPlanMode] = useState(false);
 
   const handleGenerate = () => search(query);
+
+  const handlePlan = () => {
+    setPlanMode(true);
+    setQuery('');
+    planChat.reset();
+  };
 
   const handleQuickSelect = (q: string) => {
     setQuery(q);
     search(q);
   };
 
+  // Sends the current input to the Planning Agent and clears the field; the
+  // reply streams into the conversation transcript.
+  const handleSend = () => {
+    planChat.ask(query);
+    setQuery('');
+  };
+
+  const busy = planMode ? planChat.isStreaming : isLoading;
+
+  // Plan mode uses a dedicated split layout: a chat pane on the right (the
+  // conversation transcript above a one-line input) with the heading and intro
+  // stacked in the remaining space on the left.
+  if (planMode) {
+    return (
+      <main key="agent-view" className="view-motion px-12 pb-8">
+        <div className="flex gap-8">
+          <div className="flex flex-1 flex-col gap-8 py-12">
+            <div>
+              <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-[var(--color-leaf)] px-4 py-1.5 text-xs font-semibold text-[var(--color-forest)]">
+                <Sparkles className="h-3.5 w-3.5" strokeWidth={2.5} />
+                Planning Agent
+              </span>
+              <h1 className="mb-4 text-4xl font-extrabold tracking-tight text-[var(--color-ink)] sm:text-5xl">
+                Make your perfect<br /><span className="text-[var(--color-leaf)]">ride</span>
+              </h1>
+              <p className="text-base text-[var(--color-moss-muted)] sm:text-lg">
+                craft the perfect route customized to you
+              </p>
+            </div>
+          </div>
+
+          <div className="flex h-[90vh] w-[60vw] flex-shrink-0 flex-col gap-3 py-12">
+            <Conversation
+              messages={planChat.messages}
+              isStreaming={planChat.isStreaming}
+              error={planChat.error}
+            />
+            <ChatInput value={query} onChange={setQuery} onSubmit={handleSend} isLoading={busy} />
+            <p className="text-center text-xs text-[var(--color-moss-muted)] opacity-60">
+              VeloMindAI's Planning Agent uses third party AI
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <main className="mx-auto max-w-5xl px-4 pb-24">
+    <main key="regular-view" className="view-motion mx-auto max-w-5xl px-4 pb-24">
 
       {/* Hero */}
       <section className="py-16 text-center sm:py-24">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-leaf-border)] bg-[var(--color-leaf-wash)] px-4 py-1.5">
-          <Sparkles className="h-3.5 w-3.5 text-[var(--color-leaf)]" />
-          <span className="text-xs font-medium text-[var(--color-sage-text)]">Natural-language route search</span>
-        </div>
-
         <h1 className="mb-4 text-4xl font-extrabold tracking-tight text-[var(--color-ink)] sm:text-5xl lg:text-6xl">
-          Find your perfect<br />
-          <span className="text-[var(--color-leaf)]">ride</span>
+          Find your perfect<br /><span className="text-[var(--color-leaf)]">ride</span>
         </h1>
         <p className="mb-10 text-base text-[var(--color-moss-muted)] sm:text-lg">
           Describe the ride you want and compare the closest real corpus routes.
@@ -39,13 +93,15 @@ export default function GeneratePage() {
             query={query}
             onQueryChange={setQuery}
             onGenerate={handleGenerate}
-            isLoading={isLoading}
+            onPlan={handlePlan}
+            planMode={planMode}
+            isLoading={busy}
           />
-          <QuickQueries onSelect={handleQuickSelect} disabled={isLoading} />
+          <QuickQueries onSelect={handleQuickSelect} disabled={busy} />
         </div>
       </section>
 
-      {/* Results */}
+      {/* Route-search results */}
       {(isLoading || results || error) && (
         <section className="border-t border-[var(--color-bark-border)] pt-12">
           {isLoading && <LoadingSkeleton />}

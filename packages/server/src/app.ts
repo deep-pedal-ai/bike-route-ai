@@ -1,12 +1,15 @@
 import express from 'express';
 import morgan from 'morgan';
 import { createRoutesRouter } from './routes/routes.js';
+import { createChatRouter } from './routes/chat.js';
 import { corpusRouter } from './routes/corpus.js';
 import { errorHandler } from './middleware/error-handler.js';
 import type { RouteSearchService } from './services/route-search-types.js';
+import type { ChatService } from './services/chat-types.js';
 
 type AppDependencies = {
   routeSearchService?: RouteSearchService;
+  chatService?: ChatService;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -15,6 +18,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
   app.use(express.json());
   app.use('/api/routes', createRoutesRouter(dependencies));
+  app.use('/api/chat', createChatRouter(dependencies));
   app.use('/api/corpus', corpusRouter);
 
   // Central error middleware MUST be registered last, after all routes.

@@ -88,7 +88,44 @@ describe('GeneratePage', () => {
 
     await waitFor(() => expect(screen.getByText('Search unavailable')).toBeInTheDocument());
   });
+
+  it('posts the query to /api/chat when the Ask CTA is used in plan mode', async () => {
+    const fetchMock = mockFetchSse([
+      `data: ${JSON.stringify({ type: 'token', value: 'Try a ridge loop' })}\n\n`,
+      `event: done\ndata: ${JSON.stringify({ type: 'done' })}\n\n`,
+    ]);
+    render(<GeneratePage />);
+
+    // Enter the agent view via the Plan CTA.
+    fireEvent.click(screen.getByRole('button', { name: /plan/i }));
+
+    // Submit the query through the now-"Ask" CTA.
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'plan me a scenic ride' } });
+    fireEvent.click(screen.getByRole('button', { name: /^ask$/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/chat', expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ query: 'plan me a scenic ride' }),
+      })),
+    );
+  });
 });
+
+function mockFetchSse(chunks: string[]) {
+  const encoder = new TextEncoder();
+  const fetchMock = vi.fn(async () => ({
+    ok: true,
+    body: new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    }),
+  })) as unknown as typeof fetch;
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
 
 function mockFetchSuccess(body: unknown = { results: [], filtersRelaxed: false }) {
   const fetchMock = vi.fn(async () => createJsonResponse(true, body)) as unknown as typeof fetch;

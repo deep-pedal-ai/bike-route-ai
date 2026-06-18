@@ -30,6 +30,8 @@ final class RouteExplorerUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["route-detail-sheet"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Harbor Loop"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Start in Apple Maps"].exists)
+        XCTAssertTrue(app.staticTexts["Nearby"].exists)
+        XCTAssertTrue(app.staticTexts["Balboa Coffee"].exists)
         XCTAssertTrue(app.staticTexts["Facility coverage"].exists)
         app.buttons["Close route details"].tap()
 

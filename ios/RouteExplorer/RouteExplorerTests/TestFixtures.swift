@@ -30,7 +30,8 @@ func makeRouteDetail(
     id: Int = 4,
     name: String? = "Harbor Loop",
     isLoop: Bool? = true,
-    coordinates: [[Double]] = [[-73.9, 40.7], [-73.8, 40.8]]
+    coordinates: [[Double]] = [[-73.9, 40.7], [-73.8, 40.8]],
+    pois: [PoiSummary]? = nil
 ) -> CorpusRouteDetailResponse {
     GeoJSONFeature(
         geometry: LineStringGeometry(coordinates: coordinates),
@@ -54,8 +55,32 @@ func makeRouteDetail(
             facilityCoverageFraction: 0.5,
             attribution: "Test attribution",
             osmWayIdCount: 8,
-            tags: [:]
+            tags: [:],
+            pois: pois
         )
+    )
+}
+
+func makePoi(
+    id: Int = 1,
+    name: String? = "Balboa Coffee",
+    bucket: String = "coffee_food",
+    lat: Double = 40.71,
+    lng: Double = -73.98,
+    distanceM: Double = 120,
+    positionFraction: Double? = 0.25
+) -> PoiSummary {
+    PoiSummary(
+        id: id,
+        name: name,
+        bucket: bucket,
+        lat: lat,
+        lng: lng,
+        distanceM: distanceM,
+        positionFraction: positionFraction,
+        imageURL: nil,
+        imageLicense: nil,
+        imageAttribution: nil
     )
 }
 

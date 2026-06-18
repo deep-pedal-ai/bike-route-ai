@@ -43,7 +43,33 @@ struct FixtureRouteAPI: RouteAPI {
                 facilityCoverageFraction: 0.66,
                 attribution: "Fixture route data for UI smoke tests.",
                 osmWayIdCount: 3,
-                tags: [:]
+                tags: [:],
+                pois: [
+                    PoiSummary(
+                        id: 1,
+                        name: "Balboa Coffee",
+                        bucket: "coffee_food",
+                        lat: 33.619,
+                        lng: -117.91,
+                        distanceM: 85,
+                        positionFraction: 0.35,
+                        imageURL: nil,
+                        imageLicense: nil,
+                        imageAttribution: nil
+                    ),
+                    PoiSummary(
+                        id: 2,
+                        name: "Harbor Viewpoint",
+                        bucket: "scenic",
+                        lat: 33.626,
+                        lng: -117.875,
+                        distanceM: 420,
+                        positionFraction: 0.78,
+                        imageURL: nil,
+                        imageLicense: nil,
+                        imageAttribution: nil
+                    )
+                ]
             )
         )
     }

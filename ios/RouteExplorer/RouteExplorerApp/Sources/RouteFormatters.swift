@@ -24,6 +24,15 @@ enum RouteFormatters {
         return String(format: "%.0f%%", value * 100)
     }
 
+    static func poiDistance(_ meters: Double) -> String {
+        let feet = meters * 3.28084
+        if feet < 1_000 {
+            return String(format: "%.0f ft", feet)
+        }
+        let miles = meters * 0.000621371
+        return String(format: "%.1f mi", miles)
+    }
+
     static func score(_ value: Double?) -> String {
         guard let value else {
             return "Unknown"

@@ -27,4 +27,17 @@ struct MapOverlayPlannerTests {
 
         #expect(descriptors.first { $0.kind == .routeLine }?.hexColor == "#86a85e")
     }
+
+    @Test func poiDescriptorsDropInvalidCoordinatesAndFormatCalloutSubtitle() {
+        let descriptors = MapOverlayPlanner.poiDescriptors(pois: [
+            makePoi(id: 1, name: "Balboa Coffee", bucket: "coffee_food", lat: 40.71, lng: -73.98, distanceM: 120),
+            makePoi(id: 2, lat: .nan, lng: -73.96)
+        ])
+
+        #expect(descriptors.count == 1)
+        #expect(descriptors.first?.id == "poi-1")
+        #expect(descriptors.first?.title == "Balboa Coffee")
+        #expect(descriptors.first?.subtitle == "394 ft")
+        #expect(descriptors.first?.coordinate == LngLatCoordinate(longitude: -73.98, latitude: 40.71))
+    }
 }

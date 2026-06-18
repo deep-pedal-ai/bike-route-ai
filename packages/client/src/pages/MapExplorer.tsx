@@ -436,6 +436,26 @@ export default function MapExplorer() {
     didInitialFitRef.current = true;
   }, [mapLoaded, routes, focusBounds]);
 
+  // Move the camera when the region switches. The fit-to-all above only runs once
+  // (guarded by `didInitialFitRef`), so without this a region change would load a
+  // new corpus but leave the camera on the old metro. We fly to the new region's
+  // default view immediately — a guaranteed move even for an empty/slow corpus —
+  // then re-arm `didInitialFitRef` so the fit-to-all reframes to the new routes
+  // once they load (its `routes` dep changes identity only when the new fetch
+  // resolves, so it can't snap back to the stale corpus in the meantime). Keyed on
+  // the URL-derived region so back/forward and deep links move the camera too.
+  const prevRegionRef = useRef(region.key);
+  useEffect(() => {
+    if (prevRegionRef.current === region.key) return;
+    prevRegionRef.current = region.key;
+    didInitialFitRef.current = false;
+    mapRef.current?.flyTo?.({
+      center: [region.defaultView.longitude, region.defaultView.latitude],
+      zoom: region.defaultView.zoom,
+      duration: 800,
+    });
+  }, [region.key, region.defaultView]);
+
   // --- Search-driven view state. The plan's §4 three flags, tracked separately
   // so the panel can host its loading / error states while `results` is null. ---
   const panelOpen =

@@ -157,11 +157,19 @@ class ArcGISClient:
 
         Stops when a page reports no ``exceededTransferLimit`` (or returns fewer
         than ``page_size`` features). Each page is cached independently.
+
+        A 404 response is treated as an empty layer (the placeholder URL for
+        regions whose P2 source has not yet been discovered returns 404).
         """
         features: list[dict[str, Any]] = []
         offset = 0
         while True:
-            payload = self._fetch_page(offset, no_cache=no_cache)
+            try:
+                payload = self._fetch_page(offset, no_cache=no_cache)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 404:
+                    break  # layer not found — treat as empty, not an error
+                raise
             page = payload.get("features", []) or []
             features.extend(page)
 

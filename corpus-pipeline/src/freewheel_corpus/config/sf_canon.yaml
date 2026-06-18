@@ -1,0 +1,678 @@
+# DRAFT — every coordinate requires human verification before ingestion
+#
+# These 58 marquee San Francisco / Bay Area rides are a best-effort DRAFT (Phase 4
+# / WP4), mirroring config/canon.yaml (NY) and config/seattle_canon.yaml. The
+# coordinates are HUMAN-ENTERED ESTIMATES from map knowledge, NOT survey-grade —
+# a meaningful fraction will route to a distance OUTSIDE the ±25% gate on the
+# first live run and be SKIPPED + logged (this is EXPECTED, plan §8/§11). A human
+# verifies each coordinate (and tunes the waypoints so ORS routes the intended
+# corridor) before a re-run promotes the skipped entries.
+#
+# CONVENTION (Q5): coordinates here are HUMAN [lat, lon] — latitude FIRST. Code
+# swaps to [lon, lat] in exactly one place (p4.latlon_to_lonlat) with a region-
+# bounds guard (SF box: lat 36.9-38.2, lon -123.0..-121.5). This is the OPPOSITE
+# order from config/sf_boundary.geojson (RFC 7946 [lon, lat]). Do not transpose.
+#
+# Entries 1-50: infrastructure-scored marquee rides.
+# Entries 51-58: road climbs (tagged road_climb: true).
+#
+# Each entry mirrors canon.yaml's schema:
+#   slug / name / start [lat, lon] / waypoints [[lat, lon], ...] /
+#   expected_km (FULL round-trip distance for out_and_back) / out_and_back /
+#   variants (each its own name + expected_km, optionally overriding waypoints).
+
+rides:
+  # --- SF City / Golden Gate Park -------------------------------------------
+  - slug: jfk-drive-ggp
+    name: JFK Drive, Golden Gate Park (car-free)
+    start: [37.7694, -122.4862]      # east entrance near Stanyan St
+    waypoints:
+      - [37.7716, -122.4978]         # Crossover Drive junction
+      - [37.7694, -122.5097]         # Great Highway west end
+    expected_km: 12.0
+    out_and_back: false
+    variants:
+      - { name: full, expected_km: 12.0 }
+
+  - slug: ggp-full-loop
+    name: Golden Gate Park Full Loop
+    start: [37.7694, -122.4862]      # east entrance near Stanyan St
+    waypoints:
+      - [37.7716, -122.4978]         # Crossover Drive
+      - [37.7694, -122.5097]         # Great Highway west end
+      - [37.7658, -122.4940]         # south park loop
+      - [37.7694, -122.4862]         # back to start
+    expected_km: 15.0
+    out_and_back: false
+    variants:
+      - { name: full, expected_km: 15.0 }
+
+  - slug: great-highway-ocean-beach
+    name: Great Highway / Ocean Beach Protected Path
+    start: [37.7694, -122.5097]      # GGP west end / Great Highway
+    waypoints:
+      - [37.7500, -122.5097]         # Sloat Blvd
+      - [37.7274, -122.4867]         # Lake Merced north end
+    expected_km: 10.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 10.0 }
+
+  - slug: panhandle-ggp-ocean-beach
+    name: Panhandle + GGP to Ocean Beach
+    start: [37.7742, -122.4392]      # Panhandle east end (Oak St)
+    waypoints:
+      - [37.7694, -122.4862]         # GGP east entrance
+      - [37.7716, -122.4978]         # GGP mid
+      - [37.7694, -122.5097]         # Great Highway
+    expected_km: 12.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 12.0 }
+
+  - slug: lake-merced-loop
+    name: Lake Merced Loop
+    start: [37.7274, -122.4867]      # Lake Merced Blvd / John Muir Dr
+    waypoints:
+      - [37.7190, -122.4980]         # SW shore
+      - [37.7145, -122.4880]         # south end
+      - [37.7274, -122.4867]         # back to start
+    expected_km: 10.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 10.0 }
+
+  - slug: crissy-field-marina-waterfront
+    name: Crissy Field / Marina Waterfront
+    start: [37.8054, -122.4477]      # Fort Mason / Marina Blvd
+    waypoints:
+      - [37.8063, -122.4321]         # Crissy Field east
+      - [37.8115, -122.4732]         # Fort Point / Golden Gate Bridge approach
+    expected_km: 8.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 8.0 }
+
+  - slug: sf-waterfront-embarcadero
+    name: Embarcadero Waterfront
+    start: [37.7955, -122.3938]      # Ferry Building
+    waypoints:
+      - [37.8063, -122.4321]         # Pier 39 / Fisherman's Wharf area
+    expected_km: 8.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 8.0 }
+
+  - slug: ferry-building-fishermans-wharf
+    name: SF Waterfront — Ferry Building to Fisherman's Wharf
+    start: [37.7955, -122.3938]      # Ferry Building
+    waypoints:
+      - [37.8020, -122.4100]         # Broadway / Embarcadero
+      - [37.8078, -122.4175]         # Fisherman's Wharf
+    expected_km: 6.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 6.0 }
+
+  - slug: the-wiggle-ggp
+    name: The Wiggle + GGP Connection
+    start: [37.7749, -122.4194]      # Market St / Castro
+    waypoints:
+      - [37.7742, -122.4392]         # Panhandle east end
+      - [37.7694, -122.4862]         # GGP east entrance
+    expected_km: 10.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 10.0 }
+
+  - slug: valencia-street-bikeway
+    name: Valencia Street Protected Bikeway
+    start: [37.7618, -122.4211]      # 24th St / Valencia
+    waypoints:
+      - [37.7749, -122.4194]         # Market St
+    expected_km: 6.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 6.0 }
+
+  - slug: china-basin-mission-bay
+    name: China Basin / Mission Bay Waterfront
+    start: [37.7709, -122.3893]      # AT&T Park / China Basin
+    waypoints:
+      - [37.7782, -122.3920]         # Mission Bay / UCSF
+    expected_km: 8.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 8.0 }
+
+  - slug: presidio-trails-loop
+    name: Presidio Trails Loop
+    start: [37.7996, -122.4716]      # Presidio main post
+    waypoints:
+      - [37.8063, -122.4732]         # Baker Beach
+      - [37.8115, -122.4732]         # Fort Point / Golden Gate
+      - [37.7996, -122.4716]         # back to start
+    expected_km: 15.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 15.0 }
+
+  - slug: gg-bridge-crossing
+    name: Golden Gate Bridge Crossing (Fort Mason to Sausalito)
+    start: [37.8063, -122.4321]      # Fort Mason / Crissy Field
+    waypoints:
+      - [37.8115, -122.4780]         # Golden Gate Bridge south approach
+      - [37.8296, -122.4786]         # Golden Gate Bridge north (Marin)
+      - [37.8590, -122.4852]         # Sausalito ferry terminal
+    expected_km: 18.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 18.0 }
+      - { name: one-way, expected_km: 9.0, out_and_back: false }
+
+  # --- Marin County -----------------------------------------------------------
+  - slug: sausalito-waterfront
+    name: Sausalito Waterfront Path
+    start: [37.8590, -122.4852]      # Sausalito ferry terminal
+    waypoints:
+      - [37.8700, -122.5010]         # south Sausalito
+    expected_km: 10.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 10.0 }
+
+  - slug: sausalito-mill-valley-path
+    name: Sausalito to Mill Valley Multi-Use Path
+    start: [37.8590, -122.4852]      # Sausalito ferry terminal
+    waypoints:
+      - [37.8780, -122.5200]         # Mill Valley junction
+      - [37.9060, -122.5457]         # Mill Valley / Tam trailhead area
+    expected_km: 14.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 14.0 }
+
+  - slug: tiburon-sausalito-bay-trail
+    name: Tiburon to Sausalito Bay Trail
+    start: [37.8909, -122.4477]      # Tiburon ferry landing
+    waypoints:
+      - [37.8780, -122.4700]         # Corte Madera Creek area
+      - [37.8590, -122.4852]         # Sausalito
+    expected_km: 18.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 18.0 }
+
+  - slug: corte-madera-creek-trail
+    name: Corte Madera Creek Trail
+    start: [37.9352, -122.5165]      # Ross / Corte Madera Creek
+    waypoints:
+      - [37.9200, -122.5100]         # Larkspur
+    expected_km: 12.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 12.0 }
+
+  - slug: nimitz-way-tilden
+    name: Nimitz Way (Tilden Regional Park)
+    start: [37.9042, -122.2472]      # Tilden Park / Inspiration Point
+    waypoints:
+      - [37.9200, -122.2800]         # Nimitz Way west
+    expected_km: 10.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 10.0 }
+
+  # --- East Bay ---------------------------------------------------------------
+  - slug: iron-horse-regional-trail
+    name: Iron Horse Regional Trail (Concord to Pleasanton)
+    start: [37.9747, -121.9527]      # Concord BART / north trailhead
+    waypoints:
+      - [37.9000, -121.9500]         # Walnut Creek
+      - [37.8219, -121.9998]         # Danville midpoint
+      - [37.7500, -121.9400]         # San Ramon
+      - [37.6950, -121.8900]         # Pleasanton south end
+    expected_km: 42.0
+    out_and_back: true
+    variants:
+      - { name: full, expected_km: 42.0 }
+      - { name: concord-to-danville, expected_km: 28.0, waypoints: [[37.9000, -121.9500], [37.8219, -121.9998]] }
+      - { name: danville-to-pleasanton, expected_km: 18.0, waypoints: [[37.7500, -121.9400], [37.6950, -121.8900]] }
+
+  - slug: ohlone-greenway
+    name: Ohlone Greenway (El Cerrito to Oakland)
+    start: [37.9271, -122.3017]      # El Cerrito / Richmond BART area
+    waypoints:
+      - [37.9000, -122.2900]         # Albany
+      - [37.8800, -122.2700]         # Berkeley north
+    expected_km: 18.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 18.0 }
+
+  - slug: lafayette-moraga-trail
+    name: Lafayette-Moraga Regional Trail
+    start: [37.8934, -122.1238]      # Lafayette BART
+    waypoints:
+      - [37.8600, -122.1100]         # trail mid
+      - [37.8380, -122.1300]         # Moraga
+    expected_km: 19.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 19.0 }
+
+  - slug: bay-trail-berkeley-albany-richmond
+    name: Bay Trail — Berkeley / Albany / Richmond Shoreline
+    start: [37.8654, -122.3027]      # Berkeley Marina
+    waypoints:
+      - [37.8900, -122.3200]         # Albany waterfront
+      - [37.9200, -122.3600]         # Richmond shoreline
+    expected_km: 25.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 25.0 }
+
+  - slug: bay-trail-alameda-oakland-waterfront
+    name: Bay Trail — Alameda / Oakland Waterfront
+    start: [37.7726, -122.2907]      # Oakland estuary / Embarcadero
+    waypoints:
+      - [37.7440, -122.2810]         # Crown Memorial State Beach, Alameda
+    expected_km: 18.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 18.0 }
+
+  - slug: crown-memorial-state-beach
+    name: Crown Memorial State Beach (Alameda)
+    start: [37.7440, -122.2810]      # Alameda Crown Beach
+    waypoints:
+      - [37.7550, -122.2600]         # Shoreline Dr
+    expected_km: 8.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 8.0 }
+
+  - slug: bay-trail-san-leandro-hayward
+    name: Bay Trail — San Leandro to Hayward Shoreline
+    start: [37.7220, -122.1953]      # San Leandro Marina
+    waypoints:
+      - [37.6900, -122.1300]         # Hayward shoreline
+    expected_km: 22.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 22.0 }
+
+  - slug: bay-trail-coyote-hills-dumbarton
+    name: Bay Trail — Coyote Hills to Dumbarton
+    start: [37.5577, -122.0574]      # Coyote Hills Regional Park
+    waypoints:
+      - [37.5200, -122.1100]         # Newark Slough
+      - [37.5080, -122.1098]         # Dumbarton Bridge east landing
+    expected_km: 18.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 18.0 }
+
+  - slug: bay-trail-fremont-newark
+    name: Bay Trail — Fremont / Newark Shoreline
+    start: [37.5574, -122.0574]      # Coyote Hills
+    waypoints:
+      - [37.5300, -122.0700]         # Newark / Dumbarton area
+    expected_km: 20.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 20.0 }
+
+  - slug: coyote-hills-regional-park-loop
+    name: Coyote Hills Regional Park Loop
+    start: [37.5577, -122.0574]      # Coyote Hills main entrance
+    waypoints:
+      - [37.5500, -122.0650]         # south loop
+      - [37.5650, -122.0500]         # north ridge
+      - [37.5577, -122.0574]         # back to start
+    expected_km: 12.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 12.0 }
+
+  - slug: quarry-lakes-trail
+    name: Quarry Lakes Regional Trail (Fremont)
+    start: [37.5724, -121.9720]      # Quarry Lakes entrance
+    waypoints:
+      - [37.5800, -121.9600]         # lake loop
+    expected_km: 12.0
+    out_and_back: false
+    variants:
+      - { name: loop, expected_km: 12.0 }
+
+  - slug: alameda-creek-trail
+    name: Alameda Creek Regional Trail
+    start: [37.5574, -122.0574]      # Coyote Hills / creek confluence
+    waypoints:
+      - [37.5700, -122.0000]         # mid trail
+      - [37.5800, -121.9800]         # Niles Canyon west end
+    expected_km: 22.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 22.0 }
+
+  - slug: mill-creek-trail-castro-valley
+    name: Mill Creek Trail (Castro Valley)
+    start: [37.6950, -122.0820]      # Castro Valley BART area
+    waypoints:
+      - [37.7100, -122.0600]         # Chabot Regional Park boundary
+    expected_km: 14.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 14.0 }
+
+  - slug: bay-trail-point-pinole
+    name: Bay Trail — Point Pinole Regional Shoreline
+    start: [37.9600, -122.3800]      # Point Pinole entrance
+    waypoints:
+      - [37.9750, -122.3900]         # point tip
+    expected_km: 15.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 15.0 }
+
+  - slug: oakland-estuary-jack-london
+    name: Oakland Estuary / Jack London Square
+    start: [37.7963, -122.2770]      # Jack London Square
+    waypoints:
+      - [37.7900, -122.2500]         # estuary east
+    expected_km: 10.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 10.0 }
+
+  - slug: richmond-san-rafael-bridge
+    name: Richmond–San Rafael Bridge Crossing
+    start: [37.9326, -122.3639]      # Richmond waterfront
+    waypoints:
+      - [37.9600, -122.4300]         # bridge mid
+      - [37.9700, -122.4800]         # San Rafael landing
+    expected_km: 12.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 12.0 }
+
+  # --- Peninsula ----------------------------------------------------------------
+  - slug: sawyer-camp-crystal-springs
+    name: Sawyer Camp / Crystal Springs Trail
+    start: [37.5705, -122.3976]      # Skyline Blvd / Sawyer Camp north entrance
+    waypoints:
+      - [37.5521, -122.3794]         # Crystal Springs Reservoir mid
+      - [37.5300, -122.3600]         # south end
+    expected_km: 26.0
+    out_and_back: true
+    variants:
+      - { name: full, expected_km: 26.0 }
+      - { name: sawyer-camp-only, expected_km: 14.0, waypoints: [[37.5521, -122.3794]] }
+
+  - slug: crystal-springs-trail-full
+    name: Crystal Springs Regional Trail (Full)
+    start: [37.5521, -122.3794]      # Crystal Springs Reservoir
+    waypoints:
+      - [37.5300, -122.3600]         # south reservoir
+      - [37.5000, -122.3400]         # Pulgas Water Temple
+    expected_km: 27.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 27.0 }
+
+  - slug: canada-road
+    name: Canada Road (Car-Free Sundays, Woodside)
+    start: [37.5371, -122.3386]      # Canada Road / Woodside north end
+    waypoints:
+      - [37.5200, -122.3200]         # Pulgas Water Temple area
+      - [37.5080, -122.3100]         # south end
+    expected_km: 16.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 16.0 }
+
+  - slug: bay-trail-foster-city-san-mateo
+    name: Bay Trail — Foster City / San Mateo Shoreline
+    start: [37.5631, -122.2614]      # Foster City / Bay Trail
+    waypoints:
+      - [37.5800, -122.3000]         # Coyote Point
+      - [37.5900, -122.3200]         # San Mateo waterfront
+    expected_km: 28.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 28.0 }
+
+  - slug: dumbarton-bridge-crossing
+    name: Dumbarton Bridge Crossing (East Bay to Peninsula)
+    start: [37.5080, -122.1098]      # Dumbarton Bridge east (Newark)
+    waypoints:
+      - [37.5150, -122.1500]         # bridge mid
+      - [37.5200, -122.1900]         # Menlo Park / west landing
+    expected_km: 15.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 15.0 }
+
+  - slug: bay-trail-dumbarton-newark
+    name: Bay Trail — Dumbarton Bridge to Newark
+    start: [37.5200, -122.1100]      # Dumbarton Bridge east area
+    waypoints:
+      - [37.5400, -122.0800]         # Newark slough
+    expected_km: 16.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 16.0 }
+
+  - slug: coastside-trail-half-moon-bay
+    name: Coastside Trail (Half Moon Bay)
+    start: [37.4970, -122.4761]      # Half Moon Bay State Beach north
+    waypoints:
+      - [37.4700, -122.4400]         # Pillar Point
+    expected_km: 15.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 15.0 }
+
+  - slug: pacifica-coastal-trail
+    name: Pacifica Coastal Trail
+    start: [37.6130, -122.4869]      # Pacifica Linda Mar Beach
+    waypoints:
+      - [37.6000, -122.4900]         # Rockaway Beach
+    expected_km: 8.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 8.0 }
+
+  - slug: bay-trail-south-sf-candlestick
+    name: Bay Trail — South SF to Brisbane / Candlestick
+    start: [37.6879, -122.3977]      # Oyster Point / South SF
+    waypoints:
+      - [37.7100, -122.3800]         # Brisbane lagoon
+      - [37.7200, -122.3800]         # Candlestick Point area
+    expected_km: 14.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 14.0 }
+
+  # --- South Bay ----------------------------------------------------------------
+  - slug: stevens-creek-trail
+    name: Stevens Creek Trail (Cupertino to Bay)
+    start: [37.3239, -122.0449]      # Cupertino / Rancho San Antonio
+    waypoints:
+      - [37.3600, -122.0200]         # Sunnyvale midpoint
+      - [37.4000, -122.0000]         # Moffett Field / Bay Trail junction
+    expected_km: 22.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 22.0 }
+
+  - slug: los-gatos-creek-trail
+    name: Los Gatos Creek Trail
+    start: [37.2485, -121.9593]      # Los Gatos / Vasona Lake
+    waypoints:
+      - [37.2800, -121.9300]         # Campbell
+      - [37.3100, -121.9000]         # Leigh Ave / San Jose
+    expected_km: 18.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 18.0 }
+
+  - slug: coyote-creek-trail-san-jose-north
+    name: Coyote Creek Trail (San Jose North)
+    start: [37.3382, -121.8863]      # Coyote Creek Trail / downtown SJ
+    waypoints:
+      - [37.3600, -121.8700]         # north SJ
+      - [37.3900, -121.8500]         # Berryessa
+    expected_km: 25.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 25.0 }
+
+  - slug: guadalupe-river-trail
+    name: Guadalupe River Trail (San Jose)
+    start: [37.3382, -121.9000]      # downtown SJ / Guadalupe
+    waypoints:
+      - [37.3600, -121.9100]         # north Guadalupe
+      - [37.3900, -121.9000]         # Los Lagos / Alviso junction
+    expected_km: 15.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 15.0 }
+
+  - slug: san-jose-downtown-coyote-creek
+    name: San Jose Downtown to Coyote Creek Confluence
+    start: [37.3382, -121.8863]      # Coyote Creek trailhead
+    waypoints:
+      - [37.3200, -121.8800]         # south SJ
+    expected_km: 18.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 18.0 }
+
+  - slug: hellyer-coyote-creek-south
+    name: Hellyer County Park / Coyote Creek South
+    start: [37.2900, -121.8050]      # Hellyer County Park
+    waypoints:
+      - [37.2600, -121.8100]         # south Coyote Creek
+    expected_km: 18.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 18.0 }
+
+  # --- Long Multi-Region Routes -------------------------------------------------
+  - slug: sf2g
+    name: SF2G (SF to Mountain View via Bay Trail)
+    start: [37.7749, -122.4194]      # Market St / SF
+    waypoints:
+      - [37.7955, -122.3938]         # Ferry Building
+      - [37.7200, -122.3800]         # Candlestick
+      - [37.6879, -122.3977]         # South SF
+      - [37.5631, -122.2614]         # Foster City
+      - [37.4500, -122.1600]         # Moffett Field / Sunnyvale Bay Trail
+      - [37.4000, -122.0700]         # Mountain View Shoreline
+    expected_km: 70.0
+    out_and_back: false
+    variants:
+      - { name: full, expected_km: 70.0 }
+
+  # --- Road Climbs (tagged road_climb: true) ------------------------------------
+  - slug: three-bears-loop
+    name: Three Bears Loop (San Pablo / Briones)
+    road_climb: true
+    start: [37.9271, -122.3017]      # Wildcat Canyon / El Sobrante area
+    waypoints:
+      - [37.9100, -122.1200]         # Briones Reservoir east
+      - [37.9000, -122.1500]         # Lafayette Ridge
+      - [37.9271, -122.3017]         # back to start (loop)
+    expected_km: 50.0
+    out_and_back: false
+    variants:
+      - { name: full, expected_km: 50.0 }
+
+  - slug: hawk-hill-marin-headlands
+    name: Hawk Hill / Marin Headlands Loop
+    road_climb: true
+    start: [37.8296, -122.4786]      # Marin Headlands / Bunker Road
+    waypoints:
+      - [37.8350, -122.5100]         # Conzelman Rd summit
+      - [37.8590, -122.4852]         # Sausalito descent
+      - [37.8115, -122.4780]         # Golden Gate Bridge south
+      - [37.8296, -122.4786]         # back to start
+    expected_km: 45.0
+    out_and_back: false
+    variants:
+      - { name: full, expected_km: 45.0 }
+
+  - slug: mount-tamalpais-panoramic
+    name: Mount Tamalpais via Panoramic Highway
+    road_climb: true
+    start: [37.9060, -122.5457]      # Mill Valley / Tam junction
+    waypoints:
+      - [37.9200, -122.5800]         # Panoramic Hwy midpoint (within bounds: lon -122.58 > -123.0)
+      - [37.9250, -122.5950]         # Mt Tam summit area (lon -122.595 > -123.0)
+    expected_km: 50.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 50.0 }
+
+  - slug: mount-tamalpais-old-railroad-grade
+    name: Mount Tamalpais via Old Railroad Grade
+    road_climb: true
+    start: [37.9060, -122.5457]      # Mill Valley / Old Railroad Grade trailhead
+    waypoints:
+      - [37.9180, -122.5600]         # Railroad Grade mid
+      - [37.9250, -122.5800]         # West Point Inn area
+    expected_km: 30.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 30.0 }
+
+  - slug: mount-diablo-south-gate
+    name: Mount Diablo South Gate Climb
+    road_climb: true
+    start: [37.8219, -121.9998]      # Danville / Diablo Road trailhead
+    waypoints:
+      - [37.8600, -121.9500]         # Junction / North Gate Rd
+      - [37.8820, -121.9140]         # summit area
+    expected_km: 35.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 35.0 }
+
+  - slug: nicasio-reservoir-loop
+    name: Nicasio Reservoir Loop
+    road_climb: true
+    start: [37.9352, -122.5165]      # Fairfax / Sir Francis Drake Blvd
+    waypoints:
+      - [37.9800, -122.5900]         # Nicasio Valley Rd (lon -122.59 within bounds)
+      - [37.9700, -122.6000]         # Nicasio Reservoir north (lon -122.6 = boundary)
+      - [37.9352, -122.5165]         # back to start
+    expected_km: 80.0
+    out_and_back: false
+    variants:
+      - { name: full, expected_km: 80.0 }
+
+  - slug: old-la-honda-road
+    name: Old La Honda Road Climb (Woodside)
+    road_climb: true
+    start: [37.3960, -122.2340]      # Portola Rd / La Honda Rd, Woodside
+    waypoints:
+      - [37.3700, -122.2100]         # old La Honda Rd mid
+      - [37.3450, -122.1900]         # Skyline Blvd summit
+    expected_km: 25.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 25.0 }
+
+  - slug: grizzly-peak-tunnel-road
+    name: Grizzly Peak / Tunnel Road (Oakland Hills)
+    road_climb: true
+    start: [37.8654, -122.3027]      # Claremont Hotel / Tunnel Rd trailhead
+    waypoints:
+      - [37.8800, -122.2500]         # Grizzly Peak summit area
+      - [37.9000, -122.2200]         # Skyline Blvd north
+    expected_km: 35.0
+    out_and_back: true
+    variants:
+      - { name: up-and-back, expected_km: 35.0 }

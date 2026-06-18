@@ -1,0 +1,28 @@
+{
+  "type": "FeatureCollection",
+  "name": "sf_facility_coverage_draft",
+  "properties": {
+    "draft": true,
+    "coordinate_order": "[lon, lat] RFC 7946",
+    "note": "DRAFT v1 facility-data coverage area for San Francisco (Phase 3 facility_coverage_fraction normalization). Coverage represents SF city proper where SFMTA bike-facility data applies. Routes that extend outside SF city (e.g. to Marin, East Bay, or Peninsula) have only their in-city portion scored for facility proximity — the out-of-city fraction is correctly normalized out. Refine this polygon to the true SFMTA data extent before a production scoring run."
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {"name": "San Francisco city facility coverage (DRAFT)"},
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-122.52, 37.70],
+            [-122.52, 37.83],
+            [-122.36, 37.84],
+            [-122.35, 37.77],
+            [-122.37, 37.70],
+            [-122.52, 37.70]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -57,7 +57,7 @@ describe('App routing', () => {
       </MemoryRouter>
     );
     expect(screen.getByTestId('maplibre-map')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: /facility overlay/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /facility overlay/i })).toBeInTheDocument();
     expect(screen.queryByText('ride')).not.toBeInTheDocument();
   });
 
@@ -76,7 +76,7 @@ describe('App routing', () => {
     fireEvent.click(screen.getByRole('link', { name: 'Map' }));
 
     expect(screen.getByTestId('maplibre-map')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: /facility overlay/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /facility overlay/i })).toBeInTheDocument();
     expect(screen.queryByText('ride')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Map' })).toHaveClass(
       'text-[var(--color-leaf)]',

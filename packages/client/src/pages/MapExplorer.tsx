@@ -3,11 +3,9 @@ import { Map, Source, Layer } from 'react-map-gl/maplibre';
 import { useSearchParams } from 'react-router-dom';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import { SlidersHorizontal } from 'lucide-react';
+import { Layers } from 'lucide-react';
 
-import FilterBar from '../components/FilterBar';
-import FilterSheet from '../components/FilterSheet';
-import Legend from '../components/Legend';
+import DistanceFilter from '../components/DistanceFilter';
 import RegionSwitcher from '../components/RegionSwitcher';
 import RouteDetailPanel from '../components/RouteDetailPanel';
 import SearchBar from '../components/SearchBar';
@@ -279,17 +277,6 @@ function viewFromRoutes(routes: CorpusRoutesResponse, regionDefault: MapView): M
   };
 }
 
-const SOURCE_SWATCHES = SOURCES.map((source) => ({
-  label: source,
-  color: colorBySource(source),
-}));
-
-const FACILITY_SWATCHES = FACILITY_CLASSES.map((cls) => ({
-  label: cls,
-  color: facilityColor(cls),
-}));
-
-const QUALITY_GRADIENT = { from: colorByQuality(0), to: colorByQuality(1) };
 
 export default function MapExplorer() {
   const { theme } = useTheme();
@@ -299,9 +286,10 @@ export default function MapExplorer() {
   const regionParam = searchParams.get('region') ?? DEFAULT_REGION;
   const region = regionFor(regionParam);
   const [filterState, setFilterState] = useState<FilterState>({ sources: [] });
-  const [colorMode, setColorMode] = useState<ColorMode>('source');
+  // Routes are coloured by source; the in-panel source/quality toggle was
+  // removed with the filter panel, so this is fixed.
+  const colorMode: ColorMode = 'source';
   const [overlayOn, setOverlayOn] = useState<boolean>(false);
-  const [filterSheetOpen, setFilterSheetOpen] = useState<boolean>(false);
   const isMobile = useIsMobile();
 
   // Natural-language route search (shared with the Generate page). Id of the
@@ -460,8 +448,8 @@ export default function MapExplorer() {
   // so the panel can host its loading / error states while `results` is null. ---
   const panelOpen =
     search.isLoading || search.results !== null || search.error !== null;
-  // While results exist, the id-membership filter supersedes the FilterBar (D3);
-  // otherwise the FilterBar's filter rules. Both layers share this expression.
+  // While results exist, the id-membership filter supersedes the distance filter
+  // (D3); otherwise buildFilter (distance bounds) rules. Both layers share this.
   const layerFilter =
     search.results !== null
       ? buildIdFilter(search.results.map((r) => String(r.id)))
@@ -565,8 +553,8 @@ export default function MapExplorer() {
     [routes, focusBounds, framePadding],
   );
 
-  // Close the panel → clear the search and the hover, restoring the FilterBar,
-  // every path, and the full filter (D8), and return focus to the search field.
+  // Close the panel → clear the search and the hover, restoring the distance
+  // filter / full filter (D8), and return focus to the search field.
   const handleCloseSearch = () => {
     search.clear();
     setHoveredId(null);
@@ -628,6 +616,13 @@ export default function MapExplorer() {
           onQueryChange={search.setQuery}
           onGenerate={() => search.search(search.query)}
           isLoading={search.isLoading}
+          leadingControls={
+            <DistanceFilter
+              minKm={filterState.minKm}
+              maxKm={filterState.maxKm}
+              onChange={(next) => setFilterState((s) => ({ ...s, ...next }))}
+            />
+          }
         />
       </div>
 
@@ -663,38 +658,32 @@ export default function MapExplorer() {
         />
       )}
 
-      {/* FilterBar / Legend — desktop only; hidden while the search panel is open
-          (D1). On mobile this lives behind a filter button + bottom sheet. */}
-      {!panelOpen && !isMobile && (
-      <div className="map-panel absolute left-3 top-48 z-10 w-[min(27rem,calc(100vw-1.5rem))] rounded-lg border border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] p-3 shadow-[0_20px_55px_rgba(16,20,15,0.42)] backdrop-blur-md">
-        <FilterBar
-          value={filterState}
-          colorMode={colorMode}
-          onChange={setFilterState}
-          onColorModeChange={setColorMode}
-        />
-        <label className="mt-3 flex items-center justify-between gap-3 rounded border border-[var(--color-bark-border)] bg-[var(--color-bark-soft)] px-2 py-1.5 text-xs text-[var(--color-sage-text)]">
-          <span className="text-[11px] uppercase text-[var(--color-sage-text)]">
-            Facility overlay
-          </span>
-          <input
-            type="checkbox"
-            checked={overlayOn}
-            onChange={(e) => setOverlayOn(e.target.checked)}
-            className="h-4 w-4 accent-[var(--color-leaf)]"
-          />
-        </label>
-        <div className="mt-3">
-          <Legend
-            mode={colorMode}
-            sourceSwatches={SOURCE_SWATCHES}
-            qualityGradient={QUALITY_GRADIENT}
-            facilitySwatches={FACILITY_SWATCHES}
-            showFacilities={overlayOn}
-          />
-        </div>
+      {/* Facility overlay toggle — the lone survivor of the old filter panel,
+          kept reachable as a compact pill (desktop + mobile). Hidden while the
+          search panel/dock is open so it doesn't overlap them. */}
+      {!panelOpen && (
+        <button
+          type="button"
+          onClick={() => setOverlayOn((v) => !v)}
+          aria-label="Facility overlay"
+          aria-pressed={overlayOn}
+          className={[
+            'absolute bottom-4 left-4 z-30 flex h-11 items-center gap-2 rounded-full border px-4 text-xs font-medium uppercase tracking-wide shadow-[0_12px_30px_rgba(16,20,15,0.5)] backdrop-blur-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-leaf)]',
+            overlayOn
+              ? 'border-[var(--color-leaf)] bg-[var(--color-leaf)] text-[var(--color-forest)]'
+              : 'border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] text-[var(--color-cream)] hover:border-[var(--color-leaf)]',
+          ].join(' ')}
+        >
+          <Layers className="h-4 w-4" />
+          Facilities
+        </button>
+      )}
 
-        <div className="mt-3 flex flex-wrap gap-1.5 font-mono text-[10px] uppercase">
+      {/* Operational status — relocated out of the removed panel so a loading or
+          empty corpus (e.g. a sparse Seattle region) still explains itself
+          rather than showing a silent blank map. Bottom-center, non-interactive. */}
+      {!panelOpen && (
+        <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-wrap justify-center gap-1.5 font-mono text-[10px] uppercase">
           {routesLoading && (
             <span className="rounded border border-[var(--color-river)] bg-[var(--color-sky-wash)] px-2 py-1 text-[var(--color-river)]">
               Loading routes
@@ -731,35 +720,7 @@ export default function MapExplorer() {
             </span>
           )}
         </div>
-      </div>
       )}
-
-      {/* Mobile filter affordance — one tap opens the controls in a bottom sheet,
-          keeping the default mobile view to just map + search. */}
-      {!panelOpen && isMobile && (
-        <button
-          type="button"
-          onClick={() => setFilterSheetOpen(true)}
-          aria-label="Filters and layers"
-          className="absolute bottom-4 left-4 z-30 flex h-12 w-12 items-center justify-center rounded-full border border-[var(--color-bark-border)] bg-[var(--color-forest-panel)] text-[var(--color-cream)] shadow-[0_12px_30px_rgba(16,20,15,0.5)] backdrop-blur-md transition hover:border-[var(--color-leaf)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-leaf)]"
-        >
-          <SlidersHorizontal className="h-5 w-5" />
-        </button>
-      )}
-
-      <FilterSheet
-        open={isMobile && filterSheetOpen}
-        onClose={() => setFilterSheetOpen(false)}
-        filterState={filterState}
-        onFilterChange={setFilterState}
-        colorMode={colorMode}
-        onColorModeChange={setColorMode}
-        overlayOn={overlayOn}
-        onOverlayChange={setOverlayOn}
-        sourceSwatches={SOURCE_SWATCHES}
-        qualityGradient={QUALITY_GRADIENT}
-        facilitySwatches={FACILITY_SWATCHES}
-      />
 
       {/* Detail sheet: desktop always; on mobile only when the dock isn't already
           hosting the detail in its expanded state. */}

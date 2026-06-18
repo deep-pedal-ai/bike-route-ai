@@ -1,7 +1,7 @@
 // Region registry — the single source of truth the RegionSwitcher and the
-// per-region initial camera are driven by. Slice 1 ships only NY; a disabled
-// Seattle entry is shown as "coming soon" so the switcher is list-driven (a 3rd
-// region degrades into a dropdown, not a redesign) without enabling Seattle data.
+// per-region initial camera are driven by. NY and Seattle both ship enabled;
+// the list-driven switcher keeps a 3rd region a dropdown, not a redesign.
+// Disabled entries (if any) render as a non-clickable "coming soon" pill.
 // See docs/multi-region-seattle-plan.md §7, §8.
 
 export type RegionView = {
@@ -34,10 +34,9 @@ export const REGIONS: Region[] = [
   {
     key: 'seattle',
     label: 'Seattle',
-    // Puget Sound centre — present so the switcher is list-driven, but disabled
-    // (no Seattle corpus exists yet; enabled in a later slice).
+    // Puget Sound centre used until the Seattle corpus loads.
     defaultView: { longitude: -122.33, latitude: 47.61, zoom: 10 },
-    enabled: false,
+    enabled: true,
   },
 ];
 

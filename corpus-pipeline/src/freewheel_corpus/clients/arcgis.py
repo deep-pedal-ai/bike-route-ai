@@ -30,6 +30,12 @@ import httpx
 from shapely.geometry import LineString, MultiLineString, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from freewheel_corpus.cache import DiskCache
 from freewheel_corpus.metro import load_metro_boundary
@@ -45,13 +51,47 @@ DEFAULT_USER_AGENT = "freewheel-corpus/0.1 (bike-route-ai; +https://github.com/d
 
 _CACHE_CLIENT = "arcgis"
 
+# A paginated ArcGIS fetch intermittently fails mid-walk: a real Seattle SDOT run
+# hit "Server disconnected without sending a response" (httpx.RemoteProtocolError)
+# and a manual re-run then succeeded with no other change — i.e. transient. The
+# transport now backs off and retries these, mirroring the Overpass client. The
+# transient-5xx set and the retry count/backoff are deliberately the SAME as
+# overpass.py so the two clients stay consistent (see overpass._TRANSIENT_STATUSES).
+_TRANSIENT_STATUSES = frozenset({429, 502, 503, 504})
+_RETRY_ATTEMPTS = 4
+
 # (query_url, params) -> parsed GeoJSON dict
 Transport = Callable[[str, dict[str, Any]], Any]
 
 
-def _http_transport(timeout: float) -> Transport:
-    """Build the default HTTP transport: GET the FeatureServer query as GeoJSON."""
+def _is_transient_error(exc: BaseException) -> bool:
+    """True for retryable ArcGIS failures: transient 5xx/429 or transport errors.
 
+    ``httpx.TransportError`` covers the connection drops the live run hit —
+    ``RemoteProtocolError`` ("server disconnected without sending a response"),
+    ``ConnectError``/``ReadError``, and the timeout family are all subclasses.
+    Non-transient 4xx (e.g. a bad query) are NOT retried.
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _TRANSIENT_STATUSES
+    return isinstance(exc, httpx.TransportError)  # drops, timeouts, connection resets
+
+
+def _http_transport(timeout: float) -> Transport:
+    """Build the default HTTP transport: GET the FeatureServer query as GeoJSON.
+
+    Retries transient endpoint failures (connection drops, 504 et al.) with
+    exponential backoff (~5s, 10s, 20s over 4 attempts); after exhausting them
+    the last error is re-raised so the caller surfaces the failure. Matches the
+    Overpass client's backoff config.
+    """
+
+    @retry(
+        retry=retry_if_exception(_is_transient_error),
+        stop=stop_after_attempt(_RETRY_ATTEMPTS),
+        wait=wait_exponential(multiplier=5, min=5, max=60),
+        reraise=True,
+    )
     def _get(url: str, params: dict[str, Any]) -> Any:
         resp = httpx.get(
             url,

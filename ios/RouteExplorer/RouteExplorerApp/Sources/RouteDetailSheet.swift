@@ -61,6 +61,10 @@ struct RouteDetailSheet: View {
                     .accessibilityIdentifier("start-apple-maps")
                 }
 
+                if let pois = route.pois, pois.isEmpty == false {
+                    NearbyPOISection(pois: pois)
+                }
+
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 138), spacing: 10)], spacing: 10) {
                     MetricCell(title: "Distance", value: RouteFormatters.distance(route.distanceKm), systemImage: "ruler")
                     MetricCell(title: "Route type", value: RouteFormatters.loop(route.isLoop), systemImage: "arrow.triangle.2.circlepath")
@@ -99,6 +103,96 @@ struct RouteDetailSheet: View {
             return detail.properties.name ?? "Route \(detail.properties.id)"
         }
         return "Route \(selectedRouteID)"
+    }
+}
+
+struct NearbyPOISection: View {
+    let pois: [PoiSummary]
+
+    private var orderedPOIs: [PoiSummary] {
+        pois.sorted { lhs, rhs in
+            switch (lhs.positionFraction, rhs.positionFraction) {
+            case let (left?, right?):
+                return left < right
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            case (nil, nil):
+                return lhs.distanceM < rhs.distanceM
+            }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Nearby")
+                .font(.headline)
+            ForEach(orderedPOIs) { poi in
+                POIRow(poi: poi)
+            }
+        }
+        .accessibilityIdentifier("nearby-pois")
+    }
+}
+
+struct POIRow: View {
+    let poi: PoiSummary
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            leadingVisual
+            VStack(alignment: .leading, spacing: 4) {
+                Text(poi.name ?? RouteStyling.poiBucketTitle(poi.bucket))
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Text(RouteStyling.poiBucketTitle(poi.bucket))
+                    Text(RouteFormatters.poiDistance(poi.distanceM))
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                if let attribution = poi.imageAttribution, attribution.isEmpty == false {
+                    Text(attribution)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityIdentifier("poi-row-\(poi.id)")
+    }
+
+    @ViewBuilder
+    private var leadingVisual: some View {
+        if let url = poi.imageURL.flatMap(URL.init(string:)) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                default:
+                    bucketIcon
+                }
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else {
+            bucketIcon
+        }
+    }
+
+    private var bucketIcon: some View {
+        Image(systemName: RouteStyling.poiGlyphName(poi.bucket))
+            .font(.headline)
+            .foregroundStyle(.white)
+            .frame(width: 44, height: 44)
+            .background(Color(hex: RouteStyling.poiHexColor(poi.bucket)), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

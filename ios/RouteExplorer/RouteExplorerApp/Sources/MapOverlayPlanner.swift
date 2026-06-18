@@ -17,6 +17,14 @@ struct MapOverlayDescriptor: Hashable, Identifiable {
     let isInteractive: Bool
 }
 
+struct PoiAnnotationDescriptor: Hashable, Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let bucket: String
+    let coordinate: LngLatCoordinate
+}
+
 enum MapOverlayPlanner {
     static func routeDescriptors(
         routes: [GeoJSONFeature<LineStringGeometry, CorpusRouteProperties>],
@@ -88,6 +96,20 @@ enum MapOverlayPlanner {
                 )
             }
         }
+    }
+
+    static func poiDescriptors(pois: [PoiSummary]) -> [PoiAnnotationDescriptor] {
+        pois
+            .filter { $0.lat.isFinite && $0.lng.isFinite }
+            .map { poi in
+                PoiAnnotationDescriptor(
+                    id: "poi-\(poi.id)",
+                    title: poi.name ?? RouteStyling.poiBucketTitle(poi.bucket),
+                    subtitle: RouteFormatters.poiDistance(poi.distanceM),
+                    bucket: poi.bucket,
+                    coordinate: LngLatCoordinate(longitude: poi.lng, latitude: poi.lat)
+                )
+            }
     }
 
     private static func routeHexColor(for properties: CorpusRouteProperties, colorMode: ColorMode) -> String {

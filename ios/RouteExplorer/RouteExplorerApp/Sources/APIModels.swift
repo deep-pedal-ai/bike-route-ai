@@ -95,6 +95,7 @@ struct CorpusRouteDetailProperties: Codable, Equatable, Identifiable {
     let attribution: String?
     let osmWayIdCount: Int
     let tags: [String: JSONValue]
+    let pois: [PoiSummary]?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -117,6 +118,33 @@ struct CorpusRouteDetailProperties: Codable, Equatable, Identifiable {
         case attribution
         case osmWayIdCount = "osm_way_id_count"
         case tags
+        case pois
+    }
+}
+
+struct PoiSummary: Codable, Equatable, Identifiable {
+    let id: Int
+    let name: String?
+    let bucket: String
+    let lat: Double
+    let lng: Double
+    let distanceM: Double
+    let positionFraction: Double?
+    let imageURL: String?
+    let imageLicense: String?
+    let imageAttribution: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case bucket
+        case lat
+        case lng
+        case distanceM = "distance_m"
+        case positionFraction = "position_fraction"
+        case imageURL = "image_url"
+        case imageLicense = "image_license"
+        case imageAttribution = "image_attribution"
     }
 }
 

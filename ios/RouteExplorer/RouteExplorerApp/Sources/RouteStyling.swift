@@ -57,6 +57,57 @@ enum RouteStyling {
             "#737a6b"
         }
     }
+
+    static func poiHexColor(_ bucket: String) -> String {
+        switch bucket {
+        case "coffee_food":
+            "#8a4b2f"
+        case "water_rest":
+            "#2f7d9a"
+        case "scenic":
+            "#3f8f4e"
+        case "landmark":
+            "#9a5fb0"
+        case "bike_services":
+            "#c4602b"
+        default:
+            "#5c5f52"
+        }
+    }
+
+    static func poiBucketTitle(_ bucket: String) -> String {
+        switch bucket {
+        case "coffee_food":
+            "Coffee and food"
+        case "water_rest":
+            "Water and rest"
+        case "scenic":
+            "Scenic"
+        case "landmark":
+            "Landmark"
+        case "bike_services":
+            "Bike services"
+        default:
+            bucket.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    static func poiGlyphName(_ bucket: String) -> String {
+        switch bucket {
+        case "coffee_food":
+            "cup.and.saucer.fill"
+        case "water_rest":
+            "drop.fill"
+        case "scenic":
+            "binoculars.fill"
+        case "landmark":
+            "building.columns.fill"
+        case "bike_services":
+            "wrench.and.screwdriver.fill"
+        default:
+            "mappin"
+        }
+    }
 }
 
 extension Color {

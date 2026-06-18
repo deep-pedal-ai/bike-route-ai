@@ -6,6 +6,7 @@ import UIKit
 struct RouteMapView: UIViewRepresentable {
     let routeDescriptors: [MapOverlayDescriptor]
     let facilityDescriptors: [MapOverlayDescriptor]
+    let poiDescriptors: [PoiAnnotationDescriptor]
     let cameraIntent: CameraIntent?
     let onRouteSelected: (String) -> Void
 
@@ -23,6 +24,10 @@ struct RouteMapView: UIViewRepresentable {
         mapView.pointOfInterestFilter = .excludingAll
         mapView.isPitchEnabled = false
         mapView.accessibilityIdentifier = "route-map"
+        mapView.register(
+            MKMarkerAnnotationView.self,
+            forAnnotationViewWithReuseIdentifier: PoiAnnotation.reuseIdentifier
+        )
 
         let recognizer = UITapGestureRecognizer(
             target: context.coordinator,
@@ -39,6 +44,7 @@ struct RouteMapView: UIViewRepresentable {
         context.coordinator.render(
             mapView: mapView,
             facilityDescriptors: facilityDescriptors,
+            poiDescriptors: poiDescriptors,
             routeDescriptors: routeDescriptors
         )
         context.coordinator.apply(cameraIntent: cameraIntent, to: mapView)
@@ -48,6 +54,7 @@ struct RouteMapView: UIViewRepresentable {
         weak var mapView: MKMapView?
         var onRouteSelected: (String) -> Void
         private var renderedDescriptors: [MapOverlayDescriptor] = []
+        private var renderedPOIDescriptors: [PoiAnnotationDescriptor] = []
         private var descriptorsByOverlay: [ObjectIdentifier: MapOverlayDescriptor] = [:]
         private var interactiveLines: [(routeID: String, coordinates: [LngLatCoordinate])] = []
         private var lastCameraIntentID: UUID?
@@ -59,20 +66,26 @@ struct RouteMapView: UIViewRepresentable {
         func render(
             mapView: MKMapView,
             facilityDescriptors: [MapOverlayDescriptor],
+            poiDescriptors: [PoiAnnotationDescriptor],
             routeDescriptors: [MapOverlayDescriptor]
         ) {
             let descriptors = facilityDescriptors + routeDescriptors
-            guard descriptors != renderedDescriptors else {
-                return
+            if descriptors != renderedDescriptors {
+                mapView.removeOverlays(mapView.overlays)
+                descriptorsByOverlay = [:]
+                interactiveLines = []
+
+                let overlays = descriptors.compactMap(makeOverlay)
+                mapView.addOverlays(overlays, level: .aboveRoads)
+                renderedDescriptors = descriptors
             }
 
-            mapView.removeOverlays(mapView.overlays)
-            descriptorsByOverlay = [:]
-            interactiveLines = []
-
-            let overlays = descriptors.compactMap(makeOverlay)
-            mapView.addOverlays(overlays, level: .aboveRoads)
-            renderedDescriptors = descriptors
+            if poiDescriptors != renderedPOIDescriptors {
+                let currentPOIs = mapView.annotations.compactMap { $0 as? PoiAnnotation }
+                mapView.removeAnnotations(currentPOIs)
+                mapView.addAnnotations(poiDescriptors.map { PoiAnnotation(descriptor: $0) })
+                renderedPOIDescriptors = poiDescriptors
+            }
         }
 
         func apply(cameraIntent: CameraIntent?, to mapView: MKMapView) {
@@ -107,11 +120,37 @@ struct RouteMapView: UIViewRepresentable {
             return renderer
         }
 
+        func mapView(_ mapView: MKMapView, viewFor annotation: any MKAnnotation) -> MKAnnotationView? {
+            guard let poiAnnotation = annotation as? PoiAnnotation else {
+                return nil
+            }
+            let view = mapView.dequeueReusableAnnotationView(
+                withIdentifier: PoiAnnotation.reuseIdentifier,
+                for: poiAnnotation
+            )
+            guard let markerView = view as? MKMarkerAnnotationView else {
+                return view
+            }
+            markerView.annotation = poiAnnotation
+            markerView.canShowCallout = true
+            markerView.markerTintColor = UIColor(hex: RouteStyling.poiHexColor(poiAnnotation.descriptor.bucket))
+            markerView.glyphTintColor = .white
+            markerView.glyphImage = UIImage(systemName: RouteStyling.poiGlyphName(poiAnnotation.descriptor.bucket))
+            markerView.titleVisibility = .adaptive
+            markerView.subtitleVisibility = .adaptive
+            markerView.displayPriority = .defaultHigh
+            markerView.animatesWhenAdded = true
+            return markerView
+        }
+
         @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
             guard recognizer.state == .ended, let mapView else {
                 return
             }
             let point = recognizer.location(in: mapView)
+            guard isAnnotationTap(point, in: mapView) == false else {
+                return
+            }
             var bestMatch: (routeID: String, distance: CGFloat)?
 
             for line in interactiveLines.reversed() {
@@ -139,6 +178,17 @@ struct RouteMapView: UIViewRepresentable {
                 interactiveLines.append((routeID, descriptor.coordinates))
             }
             return polyline
+        }
+
+        private func isAnnotationTap(_ point: CGPoint, in mapView: MKMapView) -> Bool {
+            var hitView = mapView.hitTest(point, with: nil)
+            while let current = hitView {
+                if current is MKAnnotationView {
+                    return true
+                }
+                hitView = current.superview
+            }
+            return false
         }
 
         private func mkMapRect(for bounds: RouteBounds) -> MKMapRect {
@@ -196,6 +246,29 @@ struct RouteMapView: UIViewRepresentable {
             let projection = CGPoint(x: start.x + t * dx, y: start.y + t * dy)
             return hypot(point.x - projection.x, point.y - projection.y)
         }
+    }
+}
+
+final class PoiAnnotation: NSObject, MKAnnotation {
+    static let reuseIdentifier = "route-poi-marker"
+
+    let descriptor: PoiAnnotationDescriptor
+    let coordinate: CLLocationCoordinate2D
+
+    var title: String? {
+        descriptor.title
+    }
+
+    var subtitle: String? {
+        descriptor.subtitle
+    }
+
+    init(descriptor: PoiAnnotationDescriptor) {
+        self.descriptor = descriptor
+        self.coordinate = CLLocationCoordinate2D(
+            latitude: descriptor.coordinate.latitude,
+            longitude: descriptor.coordinate.longitude
+        )
     }
 }
 

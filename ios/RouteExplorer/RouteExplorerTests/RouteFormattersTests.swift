@@ -13,4 +13,9 @@ struct RouteFormattersTests {
     @Test func formatsPercent() {
         #expect(RouteFormatters.percent(0.357) == "36%")
     }
+
+    @Test func formatsPOIDistanceInFeetAndMiles() {
+        #expect(RouteFormatters.poiDistance(100) == "328 ft")
+        #expect(RouteFormatters.poiDistance(2_000) == "1.2 mi")
+    }
 }

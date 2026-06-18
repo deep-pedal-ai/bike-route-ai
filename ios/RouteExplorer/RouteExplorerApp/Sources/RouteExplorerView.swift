@@ -26,6 +26,9 @@ struct RouteExplorerView: View {
             facilityDescriptors: store.facilitiesEnabled
                 ? MapOverlayPlanner.facilityDescriptors(facilities: store.facilities)
                 : [],
+            poiDescriptors: MapOverlayPlanner.poiDescriptors(
+                pois: store.routeDetail?.properties.pois ?? []
+            ),
             cameraIntent: store.cameraIntent,
             onRouteSelected: { routeID in
                 store.selectRoute(routeID)

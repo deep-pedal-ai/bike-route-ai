@@ -4,6 +4,8 @@ import { renderHook, act } from '@testing-library/react';
 import { usePlanChat } from './use-plan-chat';
 import { streamChat } from '../api/chat';
 
+import type { ChatStreamChunk } from '../api/chat';
+
 // Mock the API boundary (streamChat) and assert the streaming state machine the
 // plan-mode UI depends on.
 vi.mock('../api/chat', () => ({
@@ -12,8 +14,8 @@ vi.mock('../api/chat', () => ({
 
 const streamChatMock = vi.mocked(streamChat);
 
-async function* tokens(values: string[]): AsyncGenerator<string> {
-  for (const value of values) yield value;
+async function* tokens(values: string[]): AsyncGenerator<ChatStreamChunk> {
+  for (const value of values) yield { type: 'token', value };
 }
 
 describe('usePlanChat', () => {
@@ -45,6 +47,32 @@ describe('usePlanChat', () => {
     ]);
     expect(result.current.isStreaming).toBe(false);
     expect(result.current.error).toBeNull();
+  });
+
+  it('sends a stable conversationId across turns and rotates it on reset', async () => {
+    streamChatMock.mockImplementation(() => tokens(['ok']));
+    const { result } = renderHook(() => usePlanChat());
+
+    await act(async () => {
+      await result.current.ask('first');
+    });
+    await act(async () => {
+      await result.current.ask('now add a stop');
+    });
+
+    const firstId = streamChatMock.mock.calls[0][1]?.conversationId;
+    const secondId = streamChatMock.mock.calls[1][1]?.conversationId;
+    expect(typeof firstId).toBe('string');
+    expect(secondId).toBe(firstId); // same conversation → same id
+
+    act(() => result.current.reset());
+    await act(async () => {
+      await result.current.ask('fresh start');
+    });
+
+    const thirdId = streamChatMock.mock.calls[2][1]?.conversationId;
+    expect(typeof thirdId).toBe('string');
+    expect(thirdId).not.toBe(firstId); // reset → new conversation
   });
 
   it('captures the error message and stops streaming on failure', async () => {

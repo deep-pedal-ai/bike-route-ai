@@ -24,8 +24,8 @@ function frame(event: ChatStreamEvent): string {
 
 async function collect(query: string, fetchImpl: typeof fetch): Promise<string[]> {
   const tokens: string[] = [];
-  for await (const token of streamChat(query, { fetchImpl })) {
-    tokens.push(token);
+  for await (const chunk of streamChat(query, { fetchImpl })) {
+    if (chunk.type === 'token') tokens.push(chunk.value);
   }
   return tokens;
 }

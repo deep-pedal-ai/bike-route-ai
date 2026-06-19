@@ -47,9 +47,9 @@ describe('POST /api/chat', () => {
   it('streams token frames followed by a done frame', async () => {
     const app = createApp({
       chatService: createFakeChatService(async function* () {
-        yield 'Hello';
-        yield ' ';
-        yield 'world';
+        yield { type: 'token', value: 'Hello' };
+        yield { type: 'token', value: ' ' };
+        yield { type: 'token', value: 'world' };
       }),
     });
 
@@ -65,6 +65,38 @@ describe('POST /api/chat', () => {
       `data: ${JSON.stringify({ type: 'token', value: 'world' })}`,
       `event: done\ndata: ${JSON.stringify({ type: 'done' })}`,
     ]);
+  });
+
+  it('forwards the conversationId to the chat service', async () => {
+    const calls: Array<{ query: string; conversationId?: string }> = [];
+    const app = createApp({
+      chatService: createFakeChatService(async function* (query, conversationId) {
+        calls.push({ query, conversationId });
+        yield { type: 'token', value: 'ok' };
+      }),
+    });
+
+    await withServer(app, (server) =>
+      request(server).post('/api/chat').send({ query: 'hi', conversationId: 'conv-123' }),
+    );
+
+    expect(calls).toEqual([{ query: 'hi', conversationId: 'conv-123' }]);
+  });
+
+  it('treats a missing conversationId as a standalone turn (undefined)', async () => {
+    const calls: Array<{ query: string; conversationId?: string }> = [];
+    const app = createApp({
+      chatService: createFakeChatService(async function* (query, conversationId) {
+        calls.push({ query, conversationId });
+        yield { type: 'token', value: 'ok' };
+      }),
+    });
+
+    await withServer(app, (server) =>
+      request(server).post('/api/chat').send({ query: 'hi' }),
+    );
+
+    expect(calls).toEqual([{ query: 'hi', conversationId: undefined }]);
   });
 
   it('returns 400 for a blank query before streaming starts', async () => {
@@ -95,7 +127,7 @@ describe('POST /api/chat', () => {
   it('emits a generic error frame without leaking the message when the stream fails mid-way', async () => {
     const app = createApp({
       chatService: createFakeChatService(async function* () {
-        yield 'partial';
+        yield { type: 'token', value: 'partial' };
         throw new Error('upstream boom');
       }),
     });

@@ -29,7 +29,10 @@ export function createChatController(chatService: ChatService) {
       });
 
       try {
-        for await (const token of chatService.streamReply(validation.body.query)) {
+        for await (const chunk of chatService.streamReply(
+          validation.body.query,
+          validation.body.conversationId,
+        )) {
           if (clientAborted) {
             return;
           }
@@ -37,7 +40,7 @@ export function createChatController(chatService: ChatService) {
             startStream(res);
             streamStarted = true;
           }
-          writeEvent(res, { type: 'token', value: token });
+          writeEvent(res, chunk);
         }
 
         if (clientAborted) {
@@ -100,7 +103,14 @@ function validateChatRequest(body: unknown): ChatRequestValidation {
     return { ok: false, error: `Query must be ${MAX_CHAT_QUERY_LENGTH} characters or fewer` };
   }
 
-  return { ok: true, body: { query } };
+  // conversationId is optional and opaque; accept a non-empty string, ignore
+  // anything else so a malformed id degrades to a standalone turn rather than 400ing.
+  const conversationId =
+    typeof body.conversationId === 'string' && body.conversationId.length > 0
+      ? body.conversationId
+      : undefined;
+
+  return { ok: true, body: { query, conversationId } };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

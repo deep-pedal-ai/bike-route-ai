@@ -5,6 +5,7 @@ import { streamChat } from '../api/chat';
 export type PlanMessage = {
   role: 'user' | 'assistant';
   content: string;
+  images?: string[];
 };
 
 // Plan-mode chat state machine. Holds the full conversation: each `ask` appends
@@ -25,6 +26,10 @@ export function usePlanChat(): UsePlanChat {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Stable per-conversation id sent with every turn so the server threads this
+  // chat's memory together — follow-ups like "now add a stop in X" build on the
+  // route already planned. `reset` starts a fresh conversation (new id).
+  const conversationIdRef = useRef<string>(crypto.randomUUID());
 
   const ask = async (query: string) => {
     const trimmed = query.trim();
@@ -43,8 +48,15 @@ export function usePlanChat(): UsePlanChat {
     setIsStreaming(true);
 
     try {
-      for await (const token of streamChat(trimmed, { signal: controller.signal })) {
-        setMessages((current) => appendToLast(current, token));
+      for await (const chunk of streamChat(trimmed, {
+        conversationId: conversationIdRef.current,
+        signal: controller.signal,
+      })) {
+        if (chunk.type === 'token') {
+          setMessages((current) => appendToken(current, chunk.value));
+        } else if (chunk.type === 'image') {
+          setMessages((current) => appendImage(current, chunk.url));
+        }
       }
     } catch (err) {
       if (!controller.signal.aborted) {
@@ -61,6 +73,7 @@ export function usePlanChat(): UsePlanChat {
   const reset = () => {
     abortRef.current?.abort();
     abortRef.current = null;
+    conversationIdRef.current = crypto.randomUUID();
     setMessages([]);
     setError(null);
     setIsStreaming(false);
@@ -71,8 +84,16 @@ export function usePlanChat(): UsePlanChat {
 
 // Returns a new array with `token` appended to the final (in-flight assistant)
 // message's content.
-function appendToLast(messages: PlanMessage[], token: string): PlanMessage[] {
+function appendToken(messages: PlanMessage[], token: string): PlanMessage[] {
   if (messages.length === 0) return messages;
   const last = messages[messages.length - 1];
   return [...messages.slice(0, -1), { ...last, content: last.content + token }];
+}
+
+// Returns a new array with `url` appended to the final (in-flight assistant)
+// message's image list.
+function appendImage(messages: PlanMessage[], url: string): PlanMessage[] {
+  if (messages.length === 0) return messages;
+  const last = messages[messages.length - 1];
+  return [...messages.slice(0, -1), { ...last, images: [...(last.images ?? []), url] }];
 }

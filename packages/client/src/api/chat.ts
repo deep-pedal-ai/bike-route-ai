@@ -2,20 +2,30 @@ import type { ChatRequest, ChatStreamEvent } from '@bike-route-ai/shared';
 
 const CHAT_ENDPOINT = '/api/chat';
 
-// POSTs a query to the streaming chat endpoint and yields assistant token
-// deltas as they arrive. Mirrors the server's `ChatService.streamReply`
-// contract: tokens are yielded, a `done` frame ends iteration, and an `error`
-// frame (or a non-OK response) throws. Pass `signal` to abort an in-flight
-// stream (e.g. on unmount) so we stop reading tokens the user no longer wants.
+// A single piece of a streamed reply: a text token delta, or non-text content
+// (e.g. a rendered map image). Excludes 'done'/'error' — those end iteration
+// or throw, rather than being yielded as chunks. Mirrors the server's
+// ChatStreamChunk (chat-types.ts).
+export type ChatStreamChunk = Exclude<ChatStreamEvent, { type: 'done' } | { type: 'error' }>;
+
+// POSTs a query to the streaming chat endpoint and yields assistant reply
+// chunks (text tokens, images) as they arrive. Mirrors the server's
+// `ChatService.streamReply` contract: chunks are yielded, a `done` frame ends
+// iteration, and an `error` frame (or a non-OK response) throws. Pass
+// `signal` to abort an in-flight stream (e.g. on unmount) so we stop reading
+// once the user no longer wants it.
 export async function* streamChat(
   query: string,
-  options: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {},
-): AsyncGenerator<string> {
+  options: { conversationId?: string; signal?: AbortSignal; fetchImpl?: typeof fetch } = {},
+): AsyncGenerator<ChatStreamChunk> {
   const fetchImpl = options.fetchImpl ?? fetch;
+  const body: ChatRequest = options.conversationId
+    ? { query, conversationId: options.conversationId }
+    : { query };
   const response = await fetchImpl(CHAT_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query } satisfies ChatRequest),
+    body: JSON.stringify(body),
     signal: options.signal,
   });
 
@@ -40,9 +50,9 @@ export async function* streamChat(
         const event = parseFrame(buffer.slice(0, boundary));
         buffer = buffer.slice(boundary + 2);
         if (event) {
-          if (event.type === 'token') yield event.value;
-          else if (event.type === 'done') return;
-          else throw new Error(event.error);
+          if (event.type === 'done') return;
+          else if (event.type === 'error') throw new Error(event.error);
+          else yield event;
         }
         boundary = buffer.indexOf('\n\n');
       }
@@ -73,6 +83,7 @@ function isChatStreamEvent(value: unknown): value is ChatStreamEvent {
   if (typeof value !== 'object' || value === null) return false;
   const event = value as Record<string, unknown>;
   if (event.type === 'token') return typeof event.value === 'string';
+  if (event.type === 'image') return typeof event.url === 'string';
   if (event.type === 'done') return true;
   if (event.type === 'error') return typeof event.error === 'string';
   return false;

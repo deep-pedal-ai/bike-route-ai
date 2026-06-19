@@ -51,6 +51,14 @@ export default function Conversation({ messages, isStreaming, error }: Conversat
                 <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-[var(--color-leaf)] align-text-bottom" />
               )}
             </p>
+            {message.images?.map((url, imageIndex) => (
+              <img
+                key={imageIndex}
+                src={url}
+                alt="Rendered route map"
+                className="max-w-full rounded-lg border border-[var(--color-bark-border)]"
+              />
+            ))}
           </div>
         ),
       )}

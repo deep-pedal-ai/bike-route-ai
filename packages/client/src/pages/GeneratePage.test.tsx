@@ -103,12 +103,11 @@ describe('GeneratePage', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'plan me a scenic ride' } });
     fireEvent.click(screen.getByRole('button', { name: /^ask$/i }));
 
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith('/api/chat', expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ query: 'plan me a scenic ride' }),
-      })),
-    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/chat', expect.anything()));
+
+    const [, init] = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(init).toMatchObject({ method: 'POST' });
+    expect(JSON.parse(init.body)).toMatchObject({ query: 'plan me a scenic ride' });
   });
 });
 

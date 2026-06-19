@@ -46,10 +46,14 @@ export type ErrorResponse = {
 // below (token deltas, a terminal done, or a generic error).
 export type ChatRequest = {
   query: string;
+  // Stable id for one chat session, echoed on every turn so the server can tie
+  // follow-ups ("now add a stop in X") to the same agent memory thread.
+  conversationId?: string;
 };
 
 export type ChatStreamEvent =
   | { type: 'token'; value: string }
+  | { type: 'image'; url: string }
   | { type: 'done' }
   | { type: 'error'; error: string };
 
